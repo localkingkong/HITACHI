@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STGE / LSQ3 analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: #f1f5f9;
+        }
+
+        .code-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* 圓盤容器 */
+        .wafer-disk {
+            position: relative;
+            width: 220px;
+            height: 220px;
+            background: #cbd5e1;
+            border: 6px solid #475569;
+            border-radius: 50%;
+            box-shadow: inset 0 4px 10px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        /* 感測器樣式 */
+        .sensor {
+            position: absolute;
+            width: 30px;
+            height: 18px;
+            border: 2px solid #1e293b;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: bold;
+            color: white;
+            z-index: 10;
+        }
+
+        /* 0: No Object (紅色 - 有反射) */
+        .sensor-none {
+            background-color: #ef4444;
+            box-shadow: 0 0 10px rgba(239, 68, 68, 0.5);
+        }
+
+        /* 1: Present (黑色 - 遮斷) */
+        .sensor-present {
+            background-color: #000000;
+            box-shadow: none;
+            border-color: #334155;
+        }
+
+        .status-pill {
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-weight: 600;
+            font-size: 0.8rem;
+        }
+
+        .shift-alert {
+            animation: pulse-red 1.5s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { background-color: #fee2e2; color: #dc2626; }
+            50% { background-color: #ef4444; color: #ffffff; }
+            100% { background-color: #fee2e2; color: #dc2626; }
+        }
+
+        /* SC 位置 (W1-W5) */
+        .sc-w1 { top: 10px; left: 50%; transform: translateX(-50%); }
+        .sc-w2 { top: 75px; left: 10px; }
+        .sc-w3 { bottom: 30px; left: 45px; }
+        .sc-w4 { bottom: 30px; right: 45px; }
+        .sc-w5 { top: 75px; right: 10px; }
+
+        /* LC 位置 (W1-W3) */
+        .lc-w1 { top: 15px; left: 35%; }
+        .lc-w2 { bottom: 20px; left: 25%; }
+        .lc-w3 { top: 50%; right: 10px; transform: translateY(-50%); }
+
+        .definition-box {
+            background: #ffffff;
+            border-left: 4px solid #3b82f6;
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-6xl mx-auto">
+        <!-- Header Section -->
+        <div class="bg-white rounded-2xl shadow-sm p-6 mb-6 border border-slate-200">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <h1 id="mainTitle" class="text-xl font-bold text-slate-800 flex items-center">
+                    <span class="mr-2">🔍</span> STGE / LSQ3 analyzer
+                </h1>
+                <select id="langSelect" class="bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none">
+                    <option value="en" selected>English</option>
+                    <option value="zh">繁體中文</option>
+                    <option value="ja">日本語</option>
+                </select>
+            </div>
+            
+            <input type="text" id="logInput" 
+                class="w-full p-3 text-2xl code-font border-2 border-slate-200 rounded-xl focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all uppercase tracking-widest text-center"
+                placeholder="bbccddeeff"
+                maxlength="10">
+            <div id="inputGuide" class="mt-2 flex justify-between text-[10px] text-slate-400 code-font px-4">
+                <span>LC_Status(bb)</span><span>LC_Sensor(cc)</span><span>SC_Status(dd)</span><span>SC_Sensor(ee)</span><span>Reserved(ff)</span>
+            </div>
+        </div>
+
+        <div class="grid lg:grid-cols-12 gap-6">
+            
+            <!-- Left: Visual Column -->
+            <div class="lg:col-span-5 flex flex-col gap-6">
+                
+                <!-- SC Display -->
+                <div class="bg-white rounded-2xl shadow-sm p-6 border border-slate-200 flex flex-col items-center relative">
+                    <div class="flex justify-between w-full mb-4 items-center">
+                        <h2 class="font-bold text-slate-700">SC (Upper)</h2>
+                        <span id="scStatusLabel" class="status-pill bg-slate-100 text-slate-500" data-lang-key="waiting">Waiting...</span>
+                    </div>
+                    <div class="wafer-disk" id="scDisk">
+                        <div id="sc-w1" class="sensor sc-w1 sensor-none">W1</div>
+                        <div id="sc-w2" class="sensor sc-w2 sensor-none">W2</div>
+                        <div id="sc-w3" class="sensor sc-w3 sensor-none">W3</div>
+                        <div id="sc-w4" class="sensor sc-w4 sensor-none">W4</div>
+                        <div id="sc-w5" class="sensor sc-w5 sensor-none">W5</div>
+                    </div>
+                </div>
+
+                <!-- LC Display -->
+                <div class="bg-white rounded-2xl shadow-sm p-6 border border-slate-200 flex flex-col items-center relative">
+                    <div class="flex justify-between w-full mb-4 items-center">
+                        <h2 class="font-bold text-slate-700">LC (Lower)</h2>
+                        <span id="lcStatusLabel" class="status-pill bg-slate-100 text-slate-500" data-lang-key="waiting">Waiting...</span>
+                    </div>
+                    <div class="wafer-disk" id="lcDisk">
+                        <div id="lc-w1" class="sensor lc-w1 sensor-none">W1</div>
+                        <div id="lc-w2" class="sensor lc-w2 sensor-none">W2</div>
+                        <div id="lc-w3" class="sensor lc-w3 sensor-none">W3</div>
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="bg-slate-800 rounded-xl p-4 text-white text-[10px] flex justify-around">
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-black border border-slate-500 rounded"></div>
+                        <span data-lang-key="present_desc">1: Present (Black)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <div class="w-3 h-3 bg-red-500 rounded"></div>
+                        <span data-lang-key="none_desc">0: No Object (Red)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Definitions Column -->
+            <div class="lg:col-span-7 space-y-4">
+                
+                <!-- Definition & Source Path -->
+                <div class="definition-box p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-blue-700 mb-2 border-b pb-2 flex justify-between items-center">
+                        <span data-lang-key="log_struct">Log Structure Definition</span>
+                        <span class="text-[10px] bg-blue-50 text-blue-600 px-2 py-1 rounded font-normal code-font">Path: ERRLOG, SEM_comm_toSEM</span>
+                    </h3>
+                    <div class="grid grid-cols-2 gap-4 text-xs mt-3">
+                        <div>
+                            <p class="font-bold text-slate-600" data-lang-key="status_def">Wafer Status (bb / dd)</p>
+                            <ul class="list-disc list-inside text-slate-500 mt-1 space-y-1">
+                                <li><code>00</code>: <span data-lang-key="st_00">No Wafer</span></li>
+                                <li><code>01</code>: <span data-lang-key="st_01">No Shift</span></li>
+                                <li><code>02</code>: <span class="text-red-600 font-bold" data-lang-key="st_02">Wafer SHIFT</span></li>
+                            </ul>
+                        </div>
+                        <div>
+                            <p class="font-bold text-slate-600" data-lang-key="sensor_logic">Sensor Logic</p>
+                            <ul class="list-disc list-inside text-slate-500 mt-1 space-y-1">
+                                <li><span class="font-bold text-black" data-lang-key="present">Present</span>: <span data-lang-key="logic_1">Blocked (1)</span></li>
+                                <li><span class="font-bold text-red-500" data-lang-key="none">No Object</span>: <span data-lang-key="logic_0">Reflected (0)</span></li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- LC Sensors (cc) -->
+                <div class="definition-box p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-blue-700 mb-2" data-lang-key="lc_sn_title">LC Sensor Mapping (cc)</h3>
+                    <table class="w-full text-[10px] code-font">
+                        <thead class="bg-slate-50">
+                            <tr><th class="p-1 border text-left">HEX</th><th class="p-1 border">W1</th><th class="p-1 border">W2</th><th class="p-1 border">W3</th></tr>
+                        </thead>
+                        <tbody id="lcTableBody" class="text-center text-slate-500"></tbody>
+                    </table>
+                </div>
+
+                <!-- SC Sensors (ee) -->
+                <div class="definition-box p-5 rounded-xl shadow-sm border border-slate-200">
+                    <h3 class="font-bold text-blue-700 mb-2" data-lang-key="sc_sn_title">SC Sensor Mapping (ee)</h3>
+                    <table class="w-full text-[10px] code-font">
+                        <thead class="bg-slate-50">
+                            <tr><th class="p-1 border text-left">HEX</th><th class="p-1 border">W1</th><th class="p-1 border">W2</th><th class="p-1 border">W3</th><th class="p-1 border">W4</th><th class="p-1 border">W5</th></tr>
+                        </thead>
+                        <tbody id="scTableBody" class="text-center text-slate-500"></tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const translations = {
+            en: {
+                title: "STGE / LSQ3 analyzer",
+                waiting: "Waiting...",
+                present_desc: "1: Present (Black)",
+                none_desc: "0: No Object (Red)",
+                log_struct: "Log Structure Definition",
+                status_def: "Wafer Status (bb / dd)",
+                sensor_logic: "Sensor Logic",
+                st_00: "No Wafer",
+                st_01: "No Shift",
+                st_02: "Wafer SHIFT",
+                present: "Present",
+                none: "No Object",
+                logic_1: "Blocked (1)",
+                logic_0: "Reflected (0)",
+                lc_sn_title: "LC Sensor Mapping (cc)",
+                sc_sn_title: "SC Sensor Mapping (ee)",
+                guide: "<span>LC_Status(bb)</span><span>LC_Sensor(cc)</span><span>SC_Status(dd)</span><span>SC_Sensor(ee)</span><span>Reserved(ff)</span>"
+            },
+            zh: {
+                title: "STGE / LSQ3 Analyzer",
+                waiting: "等待輸入...",
+                present_desc: "1: Present (遮斷/黑色)",
+                none_desc: "0: No Object (反射/紅色)",
+                log_struct: "Log 結構定義",
+                status_def: "晶圓狀態 (bb / dd)",
+                sensor_logic: "感測器邏輯",
+                st_00: "無晶圓",
+                st_01: "正常 (No Shift)",
+                st_02: "晶圓位移 (SHIFT)",
+                present: "Present",
+                none: "No Object",
+                logic_1: "光線遮斷 (1)",
+                logic_0: "光線反射 (0)",
+                lc_sn_title: "LC 感測器對照 (cc)",
+                sc_sn_title: "SC 感測器對照 (ee)",
+                guide: "<span>LC狀態(bb)</span><span>LC感測器(cc)</span><span>SC狀態(dd)</span><span>SC感測器(ee)</span><span>預留(ff)</span>"
+            },
+            ja: {
+                title: "STGE / LSQ3 アナライザー",
+                waiting: "入力待ち...",
+                present_desc: "1: Present (遮断/黒)",
+                none_desc: "0: No Object (反射/赤)",
+                log_struct: "Log 構造定義",
+                status_def: "ウェハ状態 (bb / dd)",
+                sensor_logic: "センサーロジック",
+                st_00: "ウェハなし",
+                st_01: "正常 (No Shift)",
+                st_02: "ウェハずれ (SHIFT)",
+                present: "Present",
+                none: "No Object",
+                logic_1: "光遮断 (1)",
+                logic_0: "反射あり (0)",
+                lc_sn_title: "LC センサーマッピング (cc)",
+                sc_sn_title: "SC センサーマッピング (ee)",
+                guide: "<span>LC状態(bb)</span><span>LCセンサー(cc)</span><span>SC状態(dd)</span><span>SCセンサー(ee)</span><span>予約(ff)</span>"
+            }
+        };
+
+        const logInput = document.getElementById('logInput');
+        const langSelect = document.getElementById('langSelect');
+        const scSensors = ['sc-w1', 'sc-w2', 'sc-w3', 'sc-w4', 'sc-w5'];
+        const lcSensors = ['lc-w1', 'lc-w2', 'lc-w3'];
+
+        let currentLang = 'en';
+
+        function updateLanguage() {
+            const t = translations[currentLang];
+            document.getElementById('mainTitle').innerHTML = `<span class="mr-2">🔍</span> ${t.title}`;
+            document.getElementById('inputGuide').innerHTML = t.guide;
+            
+            // Batch update by key
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.getAttribute('data-lang-key');
+                if (t[key]) el.innerText = t[key];
+            });
+
+            // Re-run log parsing if input has value
+            if (logInput.value.length === 10) parseLog(logInput.value);
+        }
+
+        langSelect.addEventListener('change', (e) => {
+            currentLang = e.target.value;
+            updateLanguage();
+        });
+
+        function initTables() {
+            const lcBody = document.getElementById('lcTableBody');
+            lcBody.innerHTML = '';
+            for(let i=0; i<8; i++) {
+                const hex = i.toString(16).toUpperCase().padStart(2, '0');
+                lcBody.innerHTML += `<tr class="border-b">
+                    <td class="p-1 border bg-slate-50 text-left font-bold text-slate-700">${hex}</td>
+                    <td class="p-1 border">${(i&1)}</td><td class="p-1 border">${(i>>1)&1}</td><td class="p-1 border">${(i>>2)&1}</td>
+                </tr>`;
+            }
+            
+            const scBody = document.getElementById('scTableBody');
+            scBody.innerHTML = '';
+            const scSample = ['00','01','03','07','0F','1F'];
+            scSample.forEach(hex => {
+                const val = parseInt(hex, 16);
+                scBody.innerHTML += `<tr class="border-b">
+                    <td class="p-1 border bg-slate-50 text-left font-bold text-slate-700">${hex}</td>
+                    <td class="p-1 border">${(val&1)}</td><td class="p-1 border">${(val>>1)&1}</td><td class="p-1 border">${(val>>2)&1}</td><td class="p-1 border">${(val>>3)&1}</td><td class="p-1 border">${(val>>4)&1}</td>
+                </tr>`;
+            });
+        }
+
+        logInput.addEventListener('input', (e) => {
+            const raw = e.target.value.trim().toUpperCase();
+            if (raw.length === 10) {
+                parseLog(raw);
+            }
+        });
+
+        function parseLog(hex) {
+            const lc_st = hex.substring(0, 2);
+            const lc_sn = parseInt(hex.substring(2, 4), 16);
+            const sc_st = hex.substring(4, 6);
+            const sc_sn = parseInt(hex.substring(6, 8), 16);
+
+            updateStatusUI('lcStatusLabel', lc_st);
+            updateStatusUI('scStatusLabel', sc_st);
+
+            // Update Sensors
+            for (let i = 0; i < 3; i++) setSensor(document.getElementById(lcSensors[i]), (lc_sn >> i) & 1);
+            for (let i = 0; i < 5; i++) setSensor(document.getElementById(scSensors[i]), (sc_sn >> i) & 1);
+        }
+
+        function setSensor(el, isPresent) {
+            if (!el) return;
+            el.className = isPresent ? 'sensor sensor-present' : 'sensor sensor-none';
+            // Reposition
+            const type = el.id.split('-')[0];
+            const idx = el.id.split('-')[1];
+            el.classList.add(`${type}-${idx}`);
+        }
+
+        function updateStatusUI(id, code) {
+            const el = document.getElementById(id);
+            const t = translations[currentLang];
+            const statusMap = {
+                '00': { label: t.st_00, class: 'bg-slate-100 text-slate-400' },
+                '01': { label: t.st_01, class: 'bg-green-100 text-green-700' },
+                '02': { label: t.st_02, class: 'shift-alert' }
+            };
+            const info = statusMap[code] || { label: 'Unknown', class: 'bg-slate-100 text-slate-400' };
+            el.innerText = info.label;
+            el.className = 'status-pill ' + info.class;
+        }
+
+        initTables();
+        updateLanguage();
+    </script>
+</body>
+</html>
