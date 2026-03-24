@@ -1,0 +1,196 @@
+
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>Transfer Accuracy Scatter Diagram</title>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js">
+// 每次滑桿變動都更新圖表
+for (let i = 1; i <= 3; i++) {
+    document.getElementById("rangeSlider" + i).addEventListener("input", updateChart);
+    document.getElementById("startSlider" + i).addEventListener("input", updateChart);
+}
+
+// 滾動至圖表區
+function scrollToChart() {
+    const chart = document.getElementById("chart");
+    if (chart) chart.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// 點按按鈕後也滾到圖表
+document.querySelector("button").addEventListener("click", scrollToChart);
+</script>
+
+    <style>
+        body { font-family: sans-serif; padding: 16px; }
+        textarea { width: 100%; height: 120px; font-family: monospace; font-size: 12px; margin-bottom: 8px; }
+        .slider-container, .axis-setting, .color-setting { margin: 12px 0; }
+        input[type="number"], input[type="color"], select { margin-right: 8px; }
+        .section { margin-bottom: 26px; border: 1px solid #ddd; padding: 8px; }
+    </style>
+</head>
+
+<body>
+<style>
+    #main-container {
+        display: flex;
+        gap: 30px;
+    }
+    #input-panel {
+        flex: 1;
+        max-width: 50%;
+    }
+    #chart-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    #chart {
+        margin-top: 20px;
+        width: 800px;
+        height: 800px;
+    }
+</style>
+
+
+<h2>Transfer Accuracy Scatter Diagram</h2>
+
+
+<div id="main-container"><div id="input-panel">
+<!-- Data Block -->
+<div class="section">
+    <label>Label:</label><input type="text" id="label1" value="Dataset 1">
+    <textarea id="dataInput1" placeholder="Paste raw data with 2 Column (X, Y)"></textarea>
+    <label class="colorLabel">Color：</label>
+    <input type="color" id="color1" value="#1f77b4">
+    <label class="opacityLabel">Transparency：</label>
+    <input type="number" id="opacity1" min="0" max="1" step="0.1" value="0.8"><br>
+    <label>Range：</label><span id="rangeCount1">10</span>
+    <input type="range" id="rangeSlider1" min="1" max="100" value="10" step="1" style="width: 30%;">
+    <label>Start：</label><span id="startIndex1">1</span>
+    <input type="range" id="startSlider1" min="1" max="100" value="1" step="1" style="width: 30%;">
+</div>
+
+<div class="section">
+    <label>Label:</label><input type="text" id="label2" value="Dataset 2">
+    <textarea id="dataInput2" placeholder="Paste raw data with 2 Column (X, Y)"></textarea>
+    <label class="colorLabel">Color：</label>
+    <input type="color" id="color2" value="#ff7f0e">
+    <label class="opacityLabel">Transparency：</label>
+    <input type="number" id="opacity2" min="0" max="1" step="0.1" value="0.5"><br>
+    <label>Range：</label><span id="rangeCount2">10</span>
+    <input type="range" id="rangeSlider2" min="1" max="100" value="10" step="1" style="width: 30%;">
+    <label>Start：</label><span id="startIndex2">1</span>
+    <input type="range" id="startSlider2" min="1" max="100" value="1" step="1" style="width: 30%;">
+</div>
+
+<div class="section">
+    <label>Label:</label><input type="text" id="label3" value="Dataset 3">
+    <textarea id="dataInput3" placeholder="Paste raw data with 2 Column (X, Y)"></textarea>
+    <label class="colorLabel">Color：</label>
+    <input type="color" id="color3" value="#2ca02c">
+    <label class="opacityLabel">Transparency：</label>
+    <input type="number" id="opacity3" min="0" max="1" step="0.1" value="0.5"><br>
+    <label>Range：</label><span id="rangeCount3">10</span>
+    <input type="range" id="rangeSlider3" min="1" max="100" value="10" step="1" style="width: 30%;">
+    <label>Start：</label><span id="startIndex3">1</span>
+    <input type="range" id="startSlider3" min="1" max="100" value="1" step="1" style="width: 30%;">
+</div>
+
+<!-- 軸設定 -->
+<div class="axis-setting">
+    <strong class="xAxisLabel">X axis range：</strong>
+    <input type="number" id="xMin" placeholder="Min">
+    <input type="number" id="xMax" placeholder="Max">
+</div>
+
+<div class="axis-setting">
+    <strong class="yAxisLabel">Y axis range：</strong>
+    <input type="number" id="yMin" placeholder="Min">
+    <input type="number" id="yMax" placeholder="Max">
+</div>
+
+<button onclick="updateChart()">Renew</button>
+
+</div><div id="chart-panel"><div id="chart"></div></div></div>
+
+<script>
+    function parseTextArea(text) {
+        const lines = text.trim().split('\n');
+        const data = lines.map(line => line.trim().split(/\s+/));
+        if (data.length < 1) return [];
+        return data.slice(1)
+            .map(row => row.map(parseFloat))
+            .filter(([x, y]) => !isNaN(x) && !isNaN(y));
+    }
+
+    function updateChart() {
+        const traces = [];
+
+        for (let i = 1; i <= 3; i++) {
+            const data = parseTextArea(document.getElementById("dataInput" + i).value);
+            const range = parseInt(document.getElementById("rangeSlider" + i).value);
+            const start = parseInt(document.getElementById("startSlider" + i).value) - 1;
+            const end = start + range;
+
+            document.getElementById("rangeCount" + i).innerText = range;
+            document.getElementById("startIndex" + i).innerText = start + 1;
+
+            const sliced = data.slice(start, end);
+            if (sliced.length === 0) continue;
+
+            traces.push({
+                x: sliced.map(d => d[0]),
+                y: sliced.map(d => d[1]),
+                mode: 'markers',
+                type: 'scatter',
+                name: document.getElementById('label' + i).value,
+                marker: {
+                    color: document.getElementById("color" + i).value,
+                    opacity: parseFloat(document.getElementById("opacity" + i).value),
+                    size: 6
+                }
+            });
+
+            document.getElementById("rangeSlider" + i).max = data.length;
+            document.getElementById("startSlider" + i).max = Math.max(1, data.length - 1);
+        }
+
+        const xMin = parseFloat(document.getElementById("xMin").value);
+        const xMax = parseFloat(document.getElementById("xMax").value);
+        const yMin = parseFloat(document.getElementById("yMin").value);
+        const yMax = parseFloat(document.getElementById("yMax").value);
+
+        const layout = {
+            title: "Scatter Diagram",
+            width: 800,
+            height: 800,
+            xaxis: { title: "X", range: (!isNaN(xMin) && !isNaN(xMax)) ? [xMin, xMax] : undefined },
+            yaxis: { title: "Y", range: (!isNaN(yMin) && !isNaN(yMax)) ? [yMin, yMax] : undefined, scaleanchor: "x" }
+        };
+
+        Plotly.newPlot("chart", traces, layout);
+    }
+
+    
+
+// 每次滑桿變動都更新圖表
+for (let i = 1; i <= 3; i++) {
+    document.getElementById("rangeSlider" + i).addEventListener("input", updateChart);
+    document.getElementById("startSlider" + i).addEventListener("input", updateChart);
+}
+
+// 滾動至圖表區
+function scrollToChart() {
+    const chart = document.getElementById("chart");
+    if (chart) chart.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// 點按按鈕後也滾到圖表
+document.querySelector("button").addEventListener("click", scrollToChart);
+</script>
+
+
+</body>
+</html>
