@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vacuum CCR Physical Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .dashboard-container {
+            width: 100%;
+            max-width: 900px;
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        select, button, input[type="range"] {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #555;
+            background: #444;
+            color: white;
+            font-size: 14px;
+        }
+        button {
+            background: #0078d7;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        .stats-board {
+            display: flex;
+            justify-content: space-around;
+            background: #111;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .stat-item span {
+            color: #00bcd4;
+        }
+        canvas {
+            background: #000;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            width: 100%;
+        }
+        .efficiency-msg {
+            text-align: center;
+            color: #ff9800;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="dashboard-container">
+    <h2 style="margin-top: 0; text-align: center;">Vacuum CCR Physical Dashboard (90:10 Transfer Ratio)</h2>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label for="particleSlider">Initial Particles: <span id="sliderVal">40</span></label>
+            <input type="range" id="particleSlider" min="20" max="100" step="20" value="40">
+        </div>
+        <div class="control-group">
+            <label for="polaritySelect">Electrode Polarity:</label>
+            <select id="polaritySelect">
+                <option value="A">State A (Left: -2100V, Right: -4900V)</option>
+                <option value="B">State B (Left: -4900V, Right: -2100V)</option>
+            </select>
+        </div>
+        <button id="triggerBtn">Trigger Grounding Shock (0V)</button>
+    </div>
+
+    <div class="stats-board">
+        <div class="stat-item">Particles on ESC: <span id="escCount">40</span></div>
+        <div class="stat-item">Particles on Wafer: <span id="waferCount">0</span></div>
+    </div>
+    <div class="efficiency-msg" id="effMsg">High-V Pole Cleans ~90% | Low-V Pole Cleans ~10%</div>
+
+    <canvas id="simCanvas" width="860" height="300"></canvas>
+    <canvas id="chartCanvas" width="860" height="250"></canvas>
+</div>
+
+<script>
+    // --- Canvas Setup ---
+    const simCanvas = document.getElementById('simCanvas');
+    const simCtx = simCanvas.getContext('2d');
+    const chartCanvas = document.getElementById('chartCanvas');
+    const chartCtx = chartCanvas.getContext('2d');
+
+    // --- State Variables ---
+    let totalParticles = 40;
+    let statePolarity = 'A'; // A: L-2100, R-4900. B: L-4900, R-2100
+    let isTriggered = false;
+    let particles = [];
+    let escCount = 0;
+    let waferCount = 0;
+    
+    // Geometry
+    const waferY = 50;
+    const escY = 250;
+    const leftZone = { x1: 50, x2: 420 };
+    const rightZone = { x1: 440, x2: 810 };
+
+    // --- Chart Data ---
+    const chartHistoryLength = 200;
+    let timeTick = 0;
+    let history = {
+        waferV: new Array(chartHistoryLength).fill(1), // 1: Floating, 0: 0V
+        currentI: new Array(chartHistoryLength).fill(0),
+        eFieldLeft: new Array(chartHistoryLength).fill(0),
+        eFieldRight: new Array(chartHistoryLength).fill(0)
+    };
+
+    // --- Particle Class ---
+    class Particle {
+        constructor(x, side) {
+            this.x = x;
+            this.y = escY - 5;
+            this.side = side; // 'left' or 'right'
+            this.state = 'esc'; // 'esc', 'flying', 'wafer'
+            // Assign adhesion threshold based on 90:10 target
+            // We want 90% to fly if High V, 10% to fly if Low V.
+            // Assign a random adhesion score 0.0 - 1.0
+            this.adhesionScore = Math.random(); 
+        }
+
+        update(leftV, rightV) {
+            if (this.state === 'esc' && isTriggered) {
+                let currentV = (this.side === 'left') ? leftV : rightV;
+                // Force simulation: -4900V has pull force 0.95, -2100V has pull force 0.15
+                let pullForce = (currentV === -4900) ? 0.95 : 0.15;
+                
+                if (pullForce > this.adhesionScore) {
+                    this.state = 'flying';
+                }
+            }
+
+            if (this.state === 'flying') {
+                // Ballistic movement upwards
+                this.y -= 15; // Speed
+                if (this.y <= waferY + 5) {
+                    this.y = waferY + 5;
+                    this.state = 'wafer';
+                    waferCount++;
+                    escCount--;
+                    updateDashboard();
+                }
+            }
+        }
+
+        draw() {
+            simCtx.beginPath();
+            simCtx.arc(this.x, this.y, 4, 0, Math.PI * 2);
+            simCtx.fillStyle = (this.state === 'wafer') ? '#ff5252' : '#00bcd4';
+            simCtx.fill();
+            simCtx.closePath();
+            // Draw minus sign
+            simCtx.fillStyle = '#fff';
+            simCtx.font = '8px Arial';
+            simCtx.fillText('-', this.x - 2, this.y + 3);
+        }
+    }
+
+    // --- Initialization ---
+    function initSimulation() {
+        isTriggered = false;
+        particles = [];
+        waferCount = 0;
+        escCount = totalParticles;
+        document.getElementById('triggerBtn').disabled = false;
+        
+        let half = totalParticles / 2;
+        // Populate Left
+        for(let i=0; i<half; i++) {
+            let px = leftZone.x1 + 20 + Math.random() * (leftZone.x2 - leftZone.x1 - 40);
+            particles.push(new Particle(px, 'left'));
+        }
+        // Populate Right
+        for(let i=0; i<half; i++) {
+            let px = rightZone.x1 + 20 + Math.random() * (rightZone.x2 - rightZone.x1 - 40);
+            particles.push(new Particle(px, 'right'));
+        }
+        updateDashboard();
+    }
+
+    function updateDashboard() {
+        document.getElementById('escCount').innerText = escCount;
+        document.getElementById('waferCount').innerText = waferCount;
+    }
+
+    // --- UI Event Listeners ---
+    document.getElementById('particleSlider').addEventListener('input', (e) => {
+        totalParticles = parseInt(e.target.value);
+        document.getElementById('sliderVal').innerText = totalParticles;
+        initSimulation();
+    });
+
+    document.getElementById('polaritySelect').addEventListener('change', (e) => {
+        statePolarity = e.target.value;
+        initSimulation();
+    });
+
+    document.getElementById('triggerBtn').addEventListener('click', () => {
+        if(!isTriggered) {
+            isTriggered = true;
+            document.getElementById('triggerBtn').disabled = true;
+        }
+    });
+
+    // --- Drawing Functions ---
+    function drawSimulation() {
+        simCtx.clearRect(0, 0, simCanvas.width, simCanvas.height);
+        
+        let leftV = (statePolarity === 'A') ? -2100 : -4900;
+        let rightV = (statePolarity === 'A') ? -4900 : -2100;
+
+        // Draw Background E-Field Lines
+        simCtx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        simCtx.lineWidth = 1;
+        if (isTriggered) {
+            simCtx.strokeStyle = 'rgba(255, 255, 255, 0.3)'; // Flash brighter
+        }
+        
+        // Left E-Field
+        let leftDensity = (leftV === -4900) ? 5 : 20;
+        for(let x = leftZone.x1; x <= leftZone.x2; x += leftDensity) {
+            simCtx.beginPath();
+            simCtx.moveTo(x, waferY);
+            simCtx.lineTo(x, escY);
+            simCtx.stroke();
+        }
+        // Right E-Field
+        let rightDensity = (rightV === -4900) ? 5 : 20;
+        for(let x = rightZone.x1; x <= rightZone.x2; x += rightDensity) {
+            simCtx.beginPath();
+            simCtx.moveTo(x, waferY);
+            simCtx.lineTo(x, escY);
+            simCtx.stroke();
+        }
+
+        // Draw Wafer
+        simCtx.fillStyle = '#cfcfcf';
+        simCtx.fillRect(40, waferY - 10, 780, 10);
+        simCtx.fillStyle = '#fff';
+        simCtx.font = '14px Arial';
+        simCtx.fillText('Silicon Wafer ' + (isTriggered ? '(0V)' : '(Floating)'), 380, waferY - 15);
+
+        // Draw Grounding Pin
+        simCtx.strokeStyle = '#aaa';
+        simCtx.lineWidth = 3;
+        simCtx.beginPath();
+        simCtx.moveTo(20, 10);
+        simCtx.lineTo(20, isTriggered ? waferY - 10 : waferY - 30);
+        simCtx.stroke();
+        simCtx.fillStyle = '#aaa';
+        simCtx.fillText('GND', 5, 20);
+
+        // Draw ESC
+        simCtx.fillStyle = '#4CAF50';
+        simCtx.fillRect(leftZone.x1, escY, leftZone.x2 - leftZone.x1, 20);
+        simCtx.fillRect(rightZone.x1, escY, rightZone.x2 - rightZone.x1, 20);
+        
+        simCtx.fillStyle = '#fff';
+        simCtx.fillText(`Pole 1: ${leftV}V`, leftZone.x1 + 120, escY + 15);
+        simCtx.fillText(`Pole 2: ${rightV}V`, rightZone.x1 + 120, escY + 15);
+
+        // Update and Draw Particles
+        particles.forEach(p => {
+            p.update(leftV, rightV);
+            p.draw();
+        });
+    }
+
+    function updateCharts() {
+        timeTick++;
+        
+        let leftV = (statePolarity === 'A') ? -2100 : -4900;
+        let rightV = (statePolarity === 'A') ? -4900 : -2100;
+
+        let currentWafV = isTriggered ? 0 : 1; // 1 represents floating high
+        let currentI = 0;
+        let eLeft = 0;
+        let eRight = 0;
+
+        if (isTriggered) {
+            // Generate single spike for Current
+            if (history.currentI[chartHistoryLength - 1] === 0 && history.currentI[chartHistoryLength - 2] === 0) {
+                 currentI = 1; // Spike
+            } else {
+                 currentI = 0.05; // Leakage current
+            }
+            
+            eLeft = (leftV === -4900) ? 0.9 : 0.3;
+            eRight = (rightV === -4900) ? 0.9 : 0.3;
+        }
+
+        history.waferV.shift(); history.waferV.push(currentWafV);
+        history.currentI.shift(); history.currentI.push(currentI);
+        history.eFieldLeft.shift(); history.eFieldLeft.push(eLeft);
+        history.eFieldRight.shift(); history.eFieldRight.push(eRight);
+
+        drawCharts();
+    }
+
+    function drawLine(ctx, data, color, yOffset, scale, label) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for(let i = 0; i < data.length; i++) {
+            let x = (i / chartHistoryLength) * chartCanvas.width;
+            let y = yOffset - (data[i] * scale);
+            if(i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = color;
+        ctx.fillText(label, 10, yOffset - scale - 5);
+    }
+
+    function drawCharts() {
+        chartCtx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+        
+        // Grid lines
+        chartCtx.strokeStyle = '#333';
+        chartCtx.lineWidth = 1;
+        chartCtx.beginPath();
+        chartCtx.moveTo(0, 80); chartCtx.lineTo(chartCanvas.width, 80);
+        chartCtx.moveTo(0, 160); chartCtx.lineTo(chartCanvas.width, 160);
+        chartCtx.stroke();
+
+        // Wafer Voltage (Top)
+        drawLine(chartCtx, history.waferV, '#4db8ff', 70, 40, 'Wafer Voltage (Floating -> 0V)');
+        
+        // Current (Middle)
+        drawLine(chartCtx, history.currentI, '#ffcc00', 150, 60, 'Transient Current (Spike -> Leakage)');
+        
+        // E-Field (Bottom)
+        let leftLabel = (statePolarity === 'A') ? '-2100V E-Field' : '-4900V E-Field';
+        let rightLabel = (statePolarity === 'A') ? '-4900V E-Field' : '-2100V E-Field';
+        drawLine(chartCtx, history.eFieldLeft, '#00ff00', 240, 60, `Left Pole (${leftLabel})`);
+        drawLine(chartCtx, history.eFieldRight, '#ff00ff', 240, 60, `Right Pole (${rightLabel})`);
+        
+        // Custom label placement for the second e-field line so they don't overlap
+        chartCtx.fillStyle = '#ff00ff';
+        chartCtx.fillText(`Right Pole (${rightLabel})`, 250, 240 - 60 - 5);
+    }
+
+    // --- Main Loop ---
+    function animate() {
+        drawSimulation();
+        updateCharts();
+        requestAnimationFrame(animate);
+    }
+
+    // Start
+    initSimulation();
+    animate();
+</script>
+
+</body>
+</html>
