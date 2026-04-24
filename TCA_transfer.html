@@ -2,273 +2,495 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>TCA movement simulator</title>
+    <title>TCA Particle Map Simulator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #e2e8f0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        #app-container { display: flex; height: 100vh; width: 100vw; }
-        #control-panel { width: 380px; background-color: #f8fafc; padding: 1.5rem; box-shadow: 2px 0 10px rgba(0,0,0,0.1); z-index: 10; display: flex; flex-direction: column; overflow-y: auto; border-right: 1px solid #cbd5e1; }
-        #canvas-container { flex: 1; position: relative; background-color: #ffffff; display: flex; justify-content: center; align-items: center; }
-        canvas { background-color: transparent; }
-        
-        .slider-group { background: white; padding: 1rem; rounded-lg; border: 1px solid #e2e8f0; border-radius: 0.5rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .slider-label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-weight: 600; color: #334155; font-size: 0.875rem; }
-        .slider-value { font-family: monospace; font-size: 1rem; color: #0f172a; background: #f1f5f9; padding: 0.1rem 0.4rem; border-radius: 0.25rem; }
-        
-        input[type=range] { width: 100%; cursor: pointer; }
-        
-        .data-panel { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-top: auto; }
-        .data-row { display: flex; justify-content: space-between; font-size: 0.875rem; margin-bottom: 0.25rem; }
-        .data-value { font-family: monospace; font-weight: bold; }
-        
-        .chamber-label { position: absolute; font-size: 1rem; font-weight: bold; color: #94a3b8; letter-spacing: 0.05em; pointer-events: none; }
-        #label-main { top: 2rem; }
-        #label-buffer { bottom: 2rem; }
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #f1f5f9; font-family: sans-serif; }
+        #app { display: flex; height: 100vh; }
+        #sidebar { width: 450px; background: #ffffff; border-right: 1px solid #cbd5e1; overflow-y: auto; padding: 1.5rem; box-shadow: 4px 0 15px rgba(0,0,0,0.05); }
+        #viewer { flex: 1; position: relative; background: #fff; display: flex; align-items: center; justify-content: center; }
+        #viewer canvas { cursor: crosshair; } /* 提示可點擊 */
+        .section-title { font-weight: bold; font-size: 0.875rem; color: #64748b; text-transform: uppercase; margin-bottom: 1rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.25rem; }
+        .control-group { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1.5rem; }
+        input[type=range] { width: 100%; height: 6px; background: #cbd5e1; border-radius: 5px; appearance: none; }
+        input[type=range]::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; background: #3b82f6; border-radius: 50%; cursor: pointer; }
+        .preview-canvas { width: 100%; height: 220px; background: #0f172a; border-radius: 6px; cursor: move; margin-bottom: 1rem; box-shadow: inset 0 2px 8px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
 
-<div id="app-container">
-    
-    <!-- 左側：控制面板 -->
-    <div id="control-panel">
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-gray-800 tracking-tight">TCA simulator</h1>
-            <p class="text-sm text-gray-500 mt-1">Twin Crank Arm Kinematics</p>
-            <div class="mt-2 text-xs text-gray-400 bg-gray-100 p-2 rounded">
-                主臂 R1 = 210mm <br>
-                手腕 R2 = 210mm <br>
-                晶圓直徑 = 300mm
+<div id="app">
+    <div id="sidebar">
+        <h1 class="text-xl font-bold text-gray-800 mb-6">TCA Particle Simulator</h1>
+
+        <!-- 系統狀態控制 -->
+        <div class="control-group bg-slate-800 text-white border-none">
+            <div class="flex justify-between mb-2">
+                <span class="text-sm font-bold">系統作動狀態 (θ)</span>
+                <span class="font-mono" id="thetaVal">0.0°</span>
+            </div>
+            <input type="range" id="theta" min="-52" max="52" value="0" step="0.5">
+            <div class="flex justify-between text-[10px] mt-1 opacity-60">
+                <span>BUFFER (-52°)</span>
+                <span>HOME (0°)</span>
+                <span>MAIN (52°)</span>
             </div>
         </div>
 
-        <div class="slider-group border-blue-200 bg-blue-50">
-            <div class="slider-label text-blue-900">
-                <span>Load Hand 目標 Notch (藍)</span>
-                <span class="slider-value text-blue-700"><span id="loadTVal">0</span>°</span>
-            </div>
-            <input type="range" id="loadT" min="0" max="359" value="0" class="accent-blue-600">
-            <div class="text-xs text-blue-400 flex justify-between mt-1"><span>0°</span><span>180°</span><span>359°</span></div>
+        <!-- 新增: 環境懸浮微粒設定 -->
+        <div class="section-title mt-4 text-red-600">刮傷模擬</div>
+        <div class="control-group bg-red-50/30 border-red-200">
+            <p class="text-[11px] text-gray-600 mb-3 leading-relaxed">
+                💡 <b>使用說明：</b>在右側主畫面上<span class="text-red-500 font-bold">點擊任何位置</span>即可放置環境微粒。<br>
+                拖曳上方的「系統作動狀態 (θ)」滑桿，即可觀看該固定微粒在移動旋轉的晶圓表面留下的相對刮傷軌跡。
+            </p>
+            <button id="clearParticles" class="w-full bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 rounded transition-colors">清除所有微粒</button>
         </div>
 
-        <div class="slider-group border-orange-200 bg-orange-50">
-            <div class="slider-label text-orange-900">
-                <span>Unload Hand 目標 Notch (橘)</span>
-                <span class="slider-value text-orange-700"><span id="unloadTVal">0</span>°</span>
+        <!-- Load Wafer (藍) 設定 -->
+        <div class="section-title mt-4">Load Wafer (右/藍) 粒子圖擷取</div>
+        <div class="control-group border-blue-200 bg-blue-50/30">
+            <input type="file" id="loadImgInput" class="text-xs mb-3 w-full" accept="image/*">
+            <canvas id="preLoad" width="380" height="220" class="preview-canvas hidden"></canvas>
+            
+            <div class="space-y-3" id="loadControls" style="display: none;">
+                <div class="text-[10px] text-gray-500 mb-2">💡 提示：可直接在上方預覽圖拖曳移動圓圈</div>
+                <div class="flex gap-2">
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">中心 X: <span id="lXVal">0</span></div>
+                        <input type="range" id="loadX" value="0">
+                    </div>
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">中心 Y: <span id="lYVal">0</span></div>
+                        <input type="range" id="loadY" value="0">
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">半徑 (Scale): <span id="lRVal">100</span></div>
+                        <input type="range" id="loadR" value="100">
+                    </div>
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold text-red-600">Notch 方位: <span id="lRotVal">0</span>°</div>
+                        <input type="range" id="loadRot" min="-180" max="180" value="0">
+                    </div>
+                </div>
             </div>
-            <input type="range" id="unloadT" min="0" max="359" value="0" class="accent-orange-600">
-            <div class="text-xs text-orange-400 flex justify-between mt-1"><span>0°</span><span>180°</span><span>359°</span></div>
         </div>
 
-        <div class="slider-group border-gray-300 bg-gray-100 mt-4 shadow-md">
-            <div class="slider-label text-gray-900">
-                <span>系統作動狀態 (θ)</span>
-                <span class="slider-value bg-gray-200"><span id="thetaVal">0.0</span>°</span>
-            </div>
-            <input type="range" id="theta" min="-52" max="52" value="-52" step="0.5" class="accent-gray-700">
-            <div class="text-xs text-gray-500 flex justify-between mt-2">
-                <span class="text-center w-1/3">Buffer<br>(-52°)</span>
-                <span class="text-center w-1/3">Home<br>(0°)</span>
-                <span class="text-center w-1/3">Main<br>(+52°)</span>
+        <!-- Unload Wafer (橘) 設定 -->
+        <div class="section-title">Unload Wafer (左/橘) 粒子圖擷取</div>
+        <div class="control-group border-orange-200 bg-orange-50/30">
+            <input type="file" id="unloadImgInput" class="text-xs mb-3 w-full" accept="image/*">
+            <canvas id="preUnload" width="380" height="220" class="preview-canvas hidden"></canvas>
+            
+            <div class="space-y-3" id="unloadControls" style="display: none;">
+                <div class="text-[10px] text-gray-500 mb-2">💡 提示：可直接在上方預覽圖拖曳移動圓圈</div>
+                <div class="flex gap-2">
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">中心 X: <span id="uXVal">0</span></div>
+                        <input type="range" id="unloadX" value="0">
+                    </div>
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">中心 Y: <span id="uYVal">0</span></div>
+                        <input type="range" id="unloadY" value="0">
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold">半徑 (Scale): <span id="uRVal">100</span></div>
+                        <input type="range" id="unloadR" value="100">
+                    </div>
+                    <div class="w-1/2">
+                        <div class="text-[10px] font-bold text-red-600">Notch 方位: <span id="uRotVal">0</span>°</div>
+                        <input type="range" id="unloadRot" min="-180" max="180" value="0">
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- 即時數據 -->
-        <div class="data-panel">
-            <h3 class="font-bold text-gray-700 mb-2 border-b pb-1">即時座標數據</h3>
-            <div class="mb-3">
-                <div class="text-xs font-bold text-blue-600 mb-1">Load Wafer (藍)</div>
-                <div class="data-row text-gray-600"><span>Y 軸位置:</span> <span class="data-value" id="ly">0.0 mm</span></div>
-                <div class="data-row text-gray-600"><span>Notch 角度:</span> <span class="data-value text-blue-600" id="ln">128.0°</span></div>
-            </div>
-            <div>
-                <div class="text-xs font-bold text-orange-600 mb-1">Unload Wafer (橘)</div>
-                <div class="data-row text-gray-600"><span>Y 軸位置:</span> <span class="data-value" id="uy">0.0 mm</span></div>
-                <div class="data-row text-gray-600"><span>Notch 角度:</span> <span class="data-value text-orange-600" id="un">52.0°</span></div>
-            </div>
+        <div class="bg-gray-100 p-3 rounded text-[11px] font-mono space-y-1">
+            <div class="flex justify-between"><span>Load Y Pos:</span> <span id="lyTxt">0.0</span></div>
+            <div class="flex justify-between"><span>Load Notch:</span> <span id="lnTxt" class="text-blue-600 font-bold">0.0</span></div>
+            <hr>
+            <div class="flex justify-between"><span>Unload Y Pos:</span> <span id="uyTxt">0.0</span></div>
+            <div class="flex justify-between"><span>Unload Notch:</span> <span id="unTxt" class="text-orange-600 font-bold">0.0</span></div>
         </div>
     </div>
 
-    <!-- 右側：畫布區 -->
-    <div id="canvas-container">
-        <div id="label-main" class="chamber-label">▲ Main Chamber (前方) ▲</div>
+    <div id="viewer">
         <canvas id="simCanvas"></canvas>
-        <div id="label-buffer" class="chamber-label">▼ Buffer Chamber (後方) ▼</div>
     </div>
-
 </div>
 
 <script>
+    // --- 全局變數與初始化 ---
     const canvas = document.getElementById('simCanvas');
     const ctx = canvas.getContext('2d');
-    const container = document.getElementById('canvas-container');
+    const R = 210, waferR = 150; // 機構與晶圓物理參數
     
-    // 機構實體參數
-    const R = 210;         // R1 = R2 = 210mm
-    const waferR = 150;    // 300mm 晶圓半徑
-    // 計算最大物理空間需求：手臂全伸 (2*R*sin(52)) + 晶圓半徑 (150) + 安全邊距
-    // 420 * sin(52deg) 約 331。 331 + 150 = 481。 加上邊距設為 550。
-    // 總高度需求為上下各 550，共 1100 單位。
-    const MAX_PHYSICAL_Y = 550; 
-
-    let scale = 1;
+    let imgL = null, imgU = null;
+    const particles = []; // 儲存環境微粒
+    
+    // config 儲存使用者「在原圖上」選取的圓形遮罩狀態
+    const config = {
+        load: { cx: 0, cy: 0, r: 100, rot: 0 },
+        unload: { cx: 0, cy: 0, r: 100, rot: 0 }
+    };
 
     function resize() {
-        // 設定 Canvas 為容器實際大小
-        canvas.width = container.clientWidth;
-        canvas.height = container.clientHeight;
-        
-        // 核心縮放邏輯：確保 1100 物理單位能塞進畫布高度
-        // 如果畫布特別寬，也受限於高度，確保圖形不會超出上下邊界
-        scale = canvas.height / (MAX_PHYSICAL_Y * 2);
-        
-        // 如果螢幕很窄，為了避免晶圓切到左右邊，需做額外檢查
-        // 晶圓寬度最大 300，物理需要 300 寬度。
-        const minScaleX = canvas.width / 400; 
-        if(scale > minScaleX) scale = minScaleX;
-
+        const p = canvas.parentElement;
+        canvas.width = p.clientWidth;
+        canvas.height = p.clientHeight;
         draw();
     }
-    
-    window.addEventListener('resize', resize);
+    window.onresize = resize;
 
-    function normalizeDeg(d) {
-        let res = d % 360;
-        if (res < 0) res += 360;
-        return res;
+    // --- 環境微粒事件監聽 ---
+    document.getElementById('clearParticles').onclick = () => {
+        particles.length = 0;
+        draw();
+    };
+
+    canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const cx = canvas.width / 2;
+        const cy = canvas.height / 2;
+        const scale = canvas.height / 1200;
+        
+        // 將畫布點擊座標反向轉換為實體機構的 mm 座標
+        const Px = (mouseX - cx) / scale;
+        const Py = (cy - mouseY) / scale;
+        
+        particles.push({x: Px, y: Py});
+        draw();
+    });
+
+    // --- 檔案載入與參數動態設定 ---
+    document.getElementById('loadImgInput').onchange = (e) => loadFile(e, 'load');
+    document.getElementById('unloadImgInput').onchange = (e) => loadFile(e, 'unload');
+
+    function loadFile(e, type) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                if (type === 'load') imgL = img;
+                else imgU = img;
+                
+                // 動態根據圖片大小初始化設定
+                const w = img.width, h = img.height;
+                const r = Math.min(w, h) / 2;
+                config[type] = { cx: w/2, cy: h/2, r: r, rot: 0 };
+                
+                // 解除滑桿限制，設為原圖解析度
+                setSliderBounds(`${type}X`, 0, w, w/2);
+                setSliderBounds(`${type}Y`, 0, h, h/2);
+                setSliderBounds(`${type}R`, 10, Math.max(w, h), r);
+                
+                // 顯示 UI
+                document.getElementById(`pre${type === 'load' ? 'Load' : 'Unload'}`).classList.remove('hidden');
+                document.getElementById(`${type}Controls`).style.display = 'block';
+                
+                updateUI(type);
+                drawPreview(type);
+                draw();
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function setSliderBounds(id, min, max, val) {
+        const el = document.getElementById(id);
+        if (el) { el.min = min; el.max = max; el.value = val; }
+    }
+
+    // --- 預覽畫布繪製邏輯 (所見即所得遮罩) ---
+    function drawPreview(type) {
+        const img = type === 'load' ? imgL : imgU;
+        if (!img) return;
+        
+        const pCanvas = document.getElementById(`pre${type === 'load' ? 'Load' : 'Unload'}`);
+        const pCtx = pCanvas.getContext('2d');
+        const conf = config[type];
+        
+        pCtx.clearRect(0, 0, pCanvas.width, pCanvas.height);
+        
+        // 1. 計算縮放比例，讓圖片適應預覽畫布
+        const scaleFit = Math.min(pCanvas.width / img.width, pCanvas.height / img.height);
+        const ox = (pCanvas.width - img.width * scaleFit) / 2;
+        const oy = (pCanvas.height - img.height * scaleFit) / 2;
+        
+        // 2. 畫出原圖
+        pCtx.drawImage(img, ox, oy, img.width * scaleFit, img.height * scaleFit);
+        
+        // 3. 畫出黑色半透明遮罩
+        pCtx.fillStyle = "rgba(0, 0, 0, 0.65)";
+        pCtx.fillRect(0, 0, pCanvas.width, pCanvas.height);
+        
+        // 計算選取圓圈在預覽畫布上的座標
+        const px = ox + conf.cx * scaleFit;
+        const py = oy + conf.cy * scaleFit;
+        const pr = conf.r * scaleFit;
+        
+        // 4. 挖空選取區 (圓形)
+        pCtx.globalCompositeOperation = "destination-out";
+        pCtx.beginPath();
+        pCtx.arc(px, py, pr, 0, Math.PI * 2);
+        pCtx.fill();
+        pCtx.globalCompositeOperation = "source-over";
+        
+        // 5. 畫選取區外框與 Notch 指示線
+        pCtx.strokeStyle = type === 'load' ? "#3b82f6" : "#f97316";
+        pCtx.lineWidth = 2;
+        pCtx.beginPath();
+        pCtx.arc(px, py, pr, 0, Math.PI * 2);
+        pCtx.stroke();
+        
+        // 畫紅色的 Notch 方向線 (0度為正上方)
+        const rad = conf.rot * Math.PI / 180;
+        pCtx.beginPath();
+        pCtx.moveTo(px, py);
+        pCtx.lineTo(px + pr * Math.sin(rad), py - pr * Math.cos(rad));
+        pCtx.strokeStyle = "#ef4444";
+        pCtx.stroke();
+    }
+
+    // --- 主視窗繪製邏輯 ---
+    function normalizeDeg(d) { let r = d % 360; return r < 0 ? r + 360 : r; }
+
+    // 核心數學: 將環境的絕對坐標轉換為晶圓上隨之旋轉的「局部坐標」
+    function getWaferLocalCoords(Px, Py, wy, nRad) {
+        const cos = Math.cos(nRad);
+        const sin = Math.sin(nRad);
+        const vx = Px;
+        const vy = wy - Py;
+        return {
+            x: vx * cos + vy * sin,
+            y: -vx * sin + vy * cos
+        };
     }
 
     function draw() {
-        // 讀取 UI 數值
-        const tLoad = parseInt(document.getElementById('loadT').value);
-        const tUnload = parseInt(document.getElementById('unloadT').value);
         const theta = parseFloat(document.getElementById('theta').value);
         const rad = theta * Math.PI / 180;
+        const cx = canvas.width / 2, cy = canvas.height / 2;
+        const scale = canvas.height / 1200; 
 
-        // 更新 UI 顯示
-        document.getElementById('loadTVal').innerText = tLoad;
-        document.getElementById('unloadTVal').innerText = tUnload;
-        document.getElementById('thetaVal').innerText = theta.toFixed(1);
-
-        // 清除畫布
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        document.getElementById('thetaVal').innerText = theta.toFixed(1) + "°";
+        const wyL = 2 * R * Math.sin(rad);
+        const wyU = -2 * R * Math.sin(rad);
         
-        // 畫布中心座標
-        const cx = canvas.width / 2;
-        const cy = canvas.height / 2;
+        // 機構運動學：計算晶圓在絕對座標中的角度
+        const nL = normalizeDeg(0 - 52 + theta); 
+        const nU = normalizeDeg(0 + 52 + theta); 
+        
+        document.getElementById('lyTxt').innerText = wyL.toFixed(1);
+        document.getElementById('uyTxt').innerText = wyU.toFixed(1);
+        document.getElementById('lnTxt').innerText = nL.toFixed(1) + "°";
+        document.getElementById('unTxt').innerText = nU.toFixed(1) + "°";
 
-        // 繪製中心 Y 軸導引線
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 繪製導引線
+        ctx.setLineDash([5, 5]); ctx.strokeStyle = "#e2e8f0"; ctx.beginPath();
+        ctx.moveTo(cx, 0); ctx.lineTo(cx, canvas.height); ctx.stroke();
+
+        const ex1 = R * Math.cos(rad), ey1 = R * Math.sin(rad);
+        const ex2 = -R * Math.cos(rad), ey2 = -R * Math.sin(rad);
+
+        // 繪製主臂
+        ctx.setLineDash([]); ctx.lineCap = "round";
+        ctx.strokeStyle = "#1e293b"; ctx.lineWidth = 12 * scale;
+        ctx.beginPath(); ctx.moveTo(cx + ex2*scale, cy - ey2*scale); ctx.lineTo(cx + ex1*scale, cy - ey1*scale); ctx.stroke();
+
+        // 繪製晶圓 (先畫 Unload 底層，再畫 Load 上層)
+        renderWafer(cx, cy, 0, wyU, nU, ex2, ey2, "#f97316", imgU, 'unload', scale, theta);
+        renderWafer(cx, cy, 0, wyL, nL, ex1, ey1, "#3b82f6", imgL, 'load', scale, theta);
+
+        // 繪製懸浮微粒 (環境中的絕對位置標示)
+        particles.forEach(p => {
+            const px = cx + p.x * scale;
+            const py = cy - p.y * scale;
+            
+            // 紅色圓點
+            ctx.beginPath();
+            ctx.arc(px, py, 3 * scale, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(239, 68, 68, 0.9)";
+            ctx.fill();
+            
+            // 十字標線
+            ctx.beginPath();
+            ctx.moveTo(px - 10*scale, py); ctx.lineTo(px + 10*scale, py);
+            ctx.moveTo(px, py - 10*scale); ctx.lineTo(px, py + 10*scale);
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.5)";
+            ctx.lineWidth = 1.5 * scale;
+            ctx.stroke();
+        });
+    }
+
+    function renderWafer(cx, cy, wx, wy, nDeg, ex, ey, color, img, type, s, currentTheta) {
+        const targetX = cx + wx * s;
+        const targetY = cy - wy * s;
+
+        // 畫連桿
+        ctx.strokeStyle = color; ctx.lineWidth = 8 * s;
+        ctx.beginPath(); ctx.moveTo(cx + ex*s, cy - ey*s); ctx.lineTo(targetX, targetY); ctx.stroke();
+
+        ctx.save();
+        ctx.translate(targetX, targetY);
+        // 將畫布旋轉至手臂目前的絕對角度
+        ctx.rotate(nDeg * Math.PI / 180); 
+
+        // 圓形遮罩 (限定後續繪製範圍)
         ctx.beginPath();
-        ctx.strokeStyle = "#e2e8f0";
-        ctx.lineWidth = 2;
-        ctx.setLineDash([8, 8]);
-        ctx.moveTo(cx, 0);
-        ctx.lineTo(cx, canvas.height);
+        ctx.arc(0, 0, waferR * s, 0, Math.PI * 2);
+        ctx.clip();
+
+        // 1. 繪製圖片
+        if (img) {
+            const conf = config[type];
+            // 核心投影邏輯：將使用者設定的 Notch (conf.rot) 對齊物理的 Notch (正上方)
+            ctx.rotate(-conf.rot * Math.PI / 180);
+            
+            // 將圖片縮放，使得設定的圓形半徑 (conf.r) 剛好等於物理晶圓半徑 (waferR * s)
+            const imgScale = (waferR * s) / conf.r;
+            ctx.scale(imgScale, imgScale);
+            
+            // 將圖片平移，使得使用者設定的中心點 (conf.cx, conf.cy) 落在座標原點
+            ctx.translate(-conf.cx, -conf.cy);
+            
+            ctx.drawImage(img, 0, 0);
+            // 復原坐標系以繪製軌跡
+            ctx.translate(conf.cx, conf.cy);
+            ctx.scale(1/imgScale, 1/imgScale);
+            ctx.rotate(conf.rot * Math.PI / 180);
+        } else {
+            ctx.fillStyle = color + "11"; ctx.fill();
+        }
+
+        // 2. 繪製微粒刮傷軌跡 (重點新增)
+        if (particles.length > 0) {
+            ctx.lineCap = "round";
+            ctx.lineJoin = "round";
+
+            particles.forEach(p => {
+                // 第一階段：畫出全週期的潛在軌跡 (淡紅色)
+                ctx.beginPath();
+                let isDrawing = false;
+                for (let phi = -52; phi <= 52; phi += 1) {
+                    const r_phi = phi * Math.PI / 180;
+                    const wy_phi = type === 'load' ? 2 * R * Math.sin(r_phi) : -2 * R * Math.sin(r_phi);
+                    const nDeg_phi = normalizeDeg(0 + (type === 'load' ? -52 : 52) + phi);
+                    const nRad_phi = nDeg_phi * Math.PI / 180;
+                    
+                    // 檢查在該角度時，微粒是否物理上接觸到晶圓
+                    if (Math.hypot(p.x, p.y - wy_phi) <= waferR) {
+                        const local = getWaferLocalCoords(p.x, p.y, wy_phi, nRad_phi);
+                        if (!isDrawing) { ctx.moveTo(local.x * s, local.y * s); isDrawing = true; } 
+                        else { ctx.lineTo(local.x * s, local.y * s); }
+                    } else { isDrawing = false; }
+                }
+                ctx.strokeStyle = "rgba(239, 68, 68, 0.25)";
+                ctx.lineWidth = 1.5 * s;
+                ctx.stroke();
+
+                // 第二階段：畫出從原點(-52)伸長到目前(θ)的「實際刮傷軌跡」 (粗實心紅線)
+                ctx.beginPath();
+                isDrawing = false;
+                for (let phi = -52; phi <= currentTheta; phi += 1) {
+                    const r_phi = phi * Math.PI / 180;
+                    const wy_phi = type === 'load' ? 2 * R * Math.sin(r_phi) : -2 * R * Math.sin(r_phi);
+                    const nDeg_phi = normalizeDeg(0 + (type === 'load' ? -52 : 52) + phi);
+                    const nRad_phi = nDeg_phi * Math.PI / 180;
+                    
+                    if (Math.hypot(p.x, p.y - wy_phi) <= waferR) {
+                        const local = getWaferLocalCoords(p.x, p.y, wy_phi, nRad_phi);
+                        if (!isDrawing) { ctx.moveTo(local.x * s, local.y * s); isDrawing = true; } 
+                        else { ctx.lineTo(local.x * s, local.y * s); }
+                    } else { isDrawing = false; }
+                }
+                ctx.strokeStyle = "rgba(239, 68, 68, 0.9)";
+                ctx.lineWidth = 3 * s;
+                ctx.stroke();
+            });
+        }
+
+        ctx.restore(); // 結束 clipping
+        
+        // 3. 畫晶圓物理邊框
+        ctx.beginPath();
+        ctx.arc(targetX, targetY, waferR * s, 0, Math.PI * 2);
+        ctx.strokeStyle = color; ctx.lineWidth = 2 * s; ctx.setLineDash([5, 5]);
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // 1. 運動學座標計算 (物理單位 mm)
-        // Elbow 1 (右側/Load)
-        const ex1 = R * Math.cos(rad); 
-        const ey1 = R * Math.sin(rad);
-        // Elbow 2 (左側/Unload)
-        const ex2 = -R * Math.cos(rad); 
-        const ey2 = -R * Math.sin(rad);
-        
-        // Wafer Y 軸位置 (物理單位 mm)
-        const wyL = 2 * R * Math.sin(rad); 
-        const wyU = -2 * R * Math.sin(rad);
-
-        // Notch 絕對角度計算 (Load: 目標 - 52 + θ, Unload: 目標 + 52 + θ)
-        const nL = normalizeDeg(tLoad - 52 + theta);
-        const nU = normalizeDeg(tUnload + 52 + theta);
-
-        // 更新數據面板
-        document.getElementById('ly').innerText = wyL.toFixed(1) + " mm";
-        document.getElementById('ln').innerText = nL.toFixed(1) + "°";
-        document.getElementById('uy').innerText = wyU.toFixed(1) + " mm";
-        document.getElementById('un').innerText = nU.toFixed(1) + "°";
-
-        // 2. 開始繪製 (將物理 mm 乘以 scale 轉換為畫布 pixel，Y軸需反向)
-        
-        // 繪製 Main Arm (深色基座)
-        ctx.beginPath();
-        ctx.strokeStyle = "#1e293b"; // slate-800
-        ctx.lineWidth = 14 * scale;
-        ctx.lineCap = "round";
-        ctx.moveTo(cx + ex2 * scale, cy - ey2 * scale);
-        ctx.lineTo(cx + ex1 * scale, cy - ey1 * scale);
-        ctx.stroke();
-
-        // 繪製中心 Pivot 點
-        ctx.beginPath();
-        ctx.fillStyle = "#0f172a";
-        ctx.arc(cx, cy, 10 * scale, 0, 2 * Math.PI);
-        ctx.fill();
-
-        // 定義繪製單臂與晶圓的函數
-        function drawArmAndWafer(ex, ey, wy, nDeg, colorMain, colorFill) {
-            // Hand (手臂)
-            ctx.beginPath();
-            ctx.strokeStyle = colorMain;
-            ctx.lineWidth = 10 * scale;
-            ctx.moveTo(cx + ex * scale, cy - ey * scale);
-            ctx.lineTo(cx, cy - wy * scale);
-            ctx.stroke();
-
-            // Elbow 關節點 (白色)
-            ctx.beginPath();
-            ctx.fillStyle = "#ffffff";
-            ctx.arc(cx + ex * scale, cy - ey * scale, 6 * scale, 0, 2 * Math.PI);
-            ctx.fill();
-            ctx.lineWidth = 2 * scale;
-            ctx.strokeStyle = colorMain;
-            ctx.stroke();
-
-            // Wafer 晶圓本體
-            ctx.beginPath();
-            ctx.arc(cx, cy - wy * scale, waferR * scale, 0, 2 * Math.PI);
-            ctx.fillStyle = colorFill;
-            ctx.fill();
-            ctx.strokeStyle = colorMain;
-            ctx.lineWidth = 2 * scale;
-            ctx.stroke();
-
-            // Notch 計算與繪製
-            const nRad = nDeg * Math.PI / 180;
-            // 0度在正北方 (畫布的上方，Y軸減去)
-            const nx = waferR * Math.sin(nRad);
-            const ny = waferR * Math.cos(nRad);
-            
-            // Notch 缺口 (黑色圓點)
-            ctx.beginPath();
-            ctx.fillStyle = "#000000";
-            ctx.arc(cx + nx * scale, cy - (wy + ny) * scale, 8 * scale, 0, 2 * Math.PI);
-            ctx.fill();
-
-            // Notch 指示線 (幫助看清楚角度)
-            ctx.beginPath();
-            ctx.strokeStyle = "rgba(0,0,0,0.3)";
-            ctx.lineWidth = 2 * scale;
-            ctx.moveTo(cx, cy - wy * scale);
-            ctx.lineTo(cx + nx * scale, cy - (wy + ny) * scale);
-            ctx.stroke();
-        }
-
-        // 繪製 Unload 側 (橘色，先畫在底層)
-        drawArmAndWafer(ex2, ey2, wyU, nU, "#ea580c", "rgba(249, 115, 22, 0.15)"); // orange-600
-        
-        // 繪製 Load 側 (藍色，後畫在上層)
-        drawArmAndWafer(ex1, ey1, wyL, nL, "#2563eb", "rgba(59, 130, 246, 0.15)"); // blue-600
-
+        // 4. 畫物理 Notch 標記
+        const nR = nDeg * Math.PI / 180;
+        const nx = waferR * Math.sin(nR) * s;
+        const ny = waferR * Math.cos(nR) * s;
+        ctx.fillStyle = "black"; ctx.beginPath();
+        ctx.arc(targetX + nx, targetY - ny, 6*s, 0, 7); ctx.fill();
     }
 
-    // 綁定事件並初始化
-    document.getElementById('loadT').addEventListener('input', draw);
-    document.getElementById('unloadT').addEventListener('input', draw);
-    document.getElementById('theta').addEventListener('input', draw);
-    
-    // 初始化呼叫
+    // --- 事件監聽器：更新 UI、滑鼠拖曳、滑桿 ---
+    function updateUI(type) {
+        const p = type === 'load' ? 'l' : 'u';
+        document.getElementById(`${type}X`).value = config[type].cx;
+        document.getElementById(`${type}Y`).value = config[type].cy;
+        document.getElementById(`${type}R`).value = config[type].r;
+        document.getElementById(`${type}Rot`).value = config[type].rot;
+        
+        document.getElementById(`${p}XVal`).innerText = Math.round(config[type].cx);
+        document.getElementById(`${p}YVal`).innerText = Math.round(config[type].cy);
+        document.getElementById(`${p}RVal`).innerText = Math.round(config[type].r);
+        document.getElementById(`${p}RotVal`).innerText = Math.round(config[type].rot);
+    }
+
+    ['load', 'unload'].forEach(type => {
+        // 綁定滑桿
+        ['X', 'Y', 'R', 'Rot'].forEach(prop => {
+            document.getElementById(type + prop).addEventListener('input', (e) => {
+                config[type][prop.toLowerCase()] = parseFloat(e.target.value);
+                updateUI(type);
+                drawPreview(type);
+                draw();
+            });
+        });
+
+        // 綁定預覽畫布的滑鼠拖曳功能
+        const pCanvas = document.getElementById(`pre${type === 'load' ? 'Load' : 'Unload'}`);
+        let isDragging = false;
+        
+        pCanvas.addEventListener('mousedown', () => isDragging = true);
+        window.addEventListener('mouseup', () => isDragging = false);
+        pCanvas.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            const img = type === 'load' ? imgL : imgU;
+            if (!img) return;
+            
+            // 計算滑鼠移動量與原圖解析度的比例轉換
+            const scaleFit = Math.min(pCanvas.width / img.width, pCanvas.height / img.height);
+            
+            config[type].cx += e.movementX / scaleFit;
+            config[type].cy += e.movementY / scaleFit;
+            
+            // 限制邊界避免圓圈跑太遠
+            config[type].cx = Math.max(0, Math.min(img.width, config[type].cx));
+            config[type].cy = Math.max(0, Math.min(img.height, config[type].cy));
+            
+            updateUI(type);
+            drawPreview(type);
+            draw();
+        });
+    });
+
+    document.getElementById('theta').oninput = draw;
     resize();
 </script>
 </body>
