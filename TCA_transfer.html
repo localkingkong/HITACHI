@@ -38,17 +38,17 @@
         </div>
 
         <!-- 新增: 環境懸浮微粒設定 -->
-        <div class="section-title mt-4 text-red-600">刮傷模擬</div>
+        <div class="section-title mt-4 text-red-600">Scrath Simulation</div>
         <div class="control-group bg-red-50/30 border-red-200">
             <p class="text-[11px] text-gray-600 mb-3 leading-relaxed">
-                💡 <b>使用說明：</b>在右側主畫面上<span class="text-red-500 font-bold">點擊任何位置</span>即可放置環境微粒。<br>
-                拖曳上方的「系統作動狀態 (θ)」滑桿，即可觀看該固定微粒在移動旋轉的晶圓表面留下的相對刮傷軌跡。
+                💡 <b>Explanation：</b>在右側主畫面上<span class="text-red-500 font-bold">CLICK any position</span> to setup the particle/fiber position。<br>
+                Scroll the bar above，its posible to observed the scratch pattern among wafer.。
             </p>
             <button id="clearParticles" class="w-full bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-2 rounded transition-colors">清除所有微粒</button>
         </div>
 
         <!-- Load Wafer (藍) 設定 -->
-        <div class="section-title mt-4">Load Wafer (右/藍) 粒子圖擷取</div>
+        <div class="section-title mt-4">Load Wafer (右/藍) particle map </div>
         <div class="control-group border-blue-200 bg-blue-50/30">
             <input type="file" id="loadImgInput" class="text-xs mb-3 w-full" accept="image/*">
             <canvas id="preLoad" width="380" height="220" class="preview-canvas hidden"></canvas>
@@ -79,7 +79,7 @@
         </div>
 
         <!-- Unload Wafer (橘) 設定 -->
-        <div class="section-title">Unload Wafer (左/橘) 粒子圖擷取</div>
+        <div class="section-title">Unload Wafer (左/橘) particle map</div>
         <div class="control-group border-orange-200 bg-orange-50/30">
             <input type="file" id="unloadImgInput" class="text-xs mb-3 w-full" accept="image/*">
             <canvas id="preUnload" width="380" height="220" class="preview-canvas hidden"></canvas>
