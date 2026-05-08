@@ -184,7 +184,7 @@
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Close" data-ba="B"><span>Close(B)</span></label>
                         </div>
                     </div>
-                    <!-- LV Group (Default Unchecked) -->
+                    <!-- LV Group -->
                     <div class="filter-group">
                         <div class="font-bold text-yellow-600 text-sm border-b border-gray-200 pb-1 mb-2">LV</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
@@ -204,7 +204,7 @@
         let globalData = [];
         let chartInstance = null;
         let pinnedRowData = null;
-        let currentMachineType = 'GT2000E'; // 預設機型
+        let currentMachineType = 'GT2000E';
 
         const ui = {
             fileInputGT2000E: document.getElementById('fileInputGT2000E'),
@@ -234,13 +234,35 @@
             'LV':  '#ca8a04'  // yellow
         };
 
-        // 精確解析 MODE
+        // 壓力轉換器：處理 OverRng 與 UndrRng
+        function parsePressure(val) {
+            if (val === undefined || val === null || val === '') return NaN;
+            const strVal = String(val).trim().toUpperCase();
+            if (strVal.includes('OVERRNG') || strVal === 'OVER') return 100000; // 視為大氣壓 1e5 Pa
+            if (strVal.includes('UNDRRNG') || strVal === 'UNDER') return 1e-7; // 視為高真空 1e-7 Pa
+            return parseFloat(val);
+        }
+
+        // 精確解析 MODE (容錯增強版)
         function parseCleanMode(rawMode) {
             if (!rawMode) return '-----';
-            let clean = rawMode.replace(/_/g, '').trim().toUpperCase();
-            if (clean.includes('OPEN')) return 'Open';
-            if (clean.includes('CLOS')) return 'Close';
+            let clean = String(rawMode).replace(/_/g, '').trim().toUpperCase();
+            if (clean.includes('OPEN') || clean === 'ON') return 'Open';
+            if (clean.includes('CLOS') || clean.includes('SHUT') || clean === 'OFF') return 'Close';
             return clean;
+        }
+
+        // 解析與統一 VALVE 命名
+        function parseCleanValveName(rawValve) {
+            if (!rawValve) return '----';
+            let vName = String(rawValve).replace(/_/g, '').trim().toUpperCase();
+            
+            // 強制映射
+            if (vName.includes('AV51') || vName === '51') return 'AV5-1';
+            if (vName.includes('AV52') || vName === '52') return 'AV5-2';
+            if (vName === '____' || vName === '') return '----';
+            
+            return vName;
         }
 
         function formatDataString(prefix, row) {
@@ -248,21 +270,21 @@
             
             const dateStr = row.Date || '----/--/--';
             const timeStr = row.Time || '--:--:--';
+            
             const scStr = row.SC_Pa ? row.SC_Pa.toExponential(1).toUpperCase() : '---';
             const lcStr = row.LC_Pa ? row.LC_Pa.toExponential(1).toUpperCase() : '---';
             
-            // 如果機器類型是 CG7300 或找不到數值，則顯示 N/A
             let clmStr = 'N/A';
             if (currentMachineType !== 'CG7300' && row.CLM_Pa && !isNaN(row.CLM_Pa)) {
                 clmStr = row.CLM_Pa.toExponential(1).toUpperCase();
             }
             
-            const hasValveAct = row.VALVE && row.VALVE.trim() !== '____' && row.VALVE.trim() !== '';
-            let vName = hasValveAct ? row.VALVE.replace(/_/g, '').trim() : '----';
-            if (vName === '') vName = '----';
+            const rawValveStr = row.VALVE !== null && row.VALVE !== undefined ? String(row.VALVE) : '';
+            const hasValveAct = rawValveStr.trim() !== '____' && rawValveStr.trim() !== '';
             
-            let vMode = hasValveAct ? parseCleanMode(row.MODE) : '-----';
-            const vBA = hasValveAct && row['B/A'] ? row['B/A'].trim() : '-';
+            const vName = hasValveAct ? parseCleanValveName(rawValveStr) : '----';
+            const vMode = hasValveAct ? parseCleanMode(row.MODE) : '-----';
+            const vBA = hasValveAct && row['B/A'] !== null && row['B/A'] !== undefined ? String(row['B/A']).trim() : '-';
 
             return `[${prefix}] ${dateStr} ${timeStr} | SC: ${scStr} | LC: ${lcStr} | CLM: ${clmStr} | VALVE: ${vName}, MODE: ${vMode}, B/A: ${vBA}`;
         }
@@ -363,7 +385,7 @@
             }
         };
 
-        // 2. 動態錯排標籤繪製
+        // 2. 動態標籤追蹤與貫穿線
         const nativeValveLabelsPlugin = {
             id: 'nativeValveLabels',
             afterDraw: (chart) => {
@@ -388,31 +410,67 @@
 
                 for (let i = 0; i < globalData.length; i++) {
                     const row = globalData[i];
-                    if (!row.VALVE || row.VALVE.trim() === '____' || row.VALVE.trim() === '') continue;
+                    
+                    const rawValveStr = row.VALVE !== null && row.VALVE !== undefined ? String(row.VALVE) : '';
+                    if (rawValveStr.trim() === '____' || rawValveStr.trim() === '') continue;
 
-                    const vNameRaw = row.VALVE.replace(/_/g, '').trim().toUpperCase();
+                    const vNameRaw = parseCleanValveName(rawValveStr);
                     const vModeRaw = parseCleanMode(row.MODE);
-                    const vBA = row['B/A'] ? row['B/A'].trim().toUpperCase() : '';
+                    const vBA = row['B/A'] !== null && row['B/A'] !== undefined ? String(row['B/A']).trim().toUpperCase() : '';
 
                     let group = '';
                     let drawLevel = -1;
-                    if (vNameRaw.includes('AV2')) { group = 'AV2'; drawLevel = 0; }
-                    else if (vNameRaw.includes('AV3')) { group = 'AV3'; drawLevel = 1; }
-                    else if (vNameRaw.includes('AV4')) { group = 'AV4'; drawLevel = 2; }
-                    else if (vNameRaw.includes('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
-                    else if (vNameRaw.includes('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
-                    else if (vNameRaw.includes('LV'))  { group = 'LV'; drawLevel = 5; }
+                    
+                    if (vNameRaw.startsWith('AV2')) { group = 'AV2'; drawLevel = 0; }
+                    else if (vNameRaw.startsWith('AV3')) { group = 'AV3'; drawLevel = 1; }
+                    else if (vNameRaw.startsWith('AV4')) { group = 'AV4'; drawLevel = 2; }
+                    else if (vNameRaw.startsWith('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
+                    else if (vNameRaw.startsWith('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
+                    else if (vNameRaw.startsWith('LV'))  { group = 'LV'; drawLevel = 5; }
 
                     if (drawLevel === -1) continue;
 
-                    const stateKey = `${group}_${vModeRaw}_${vBA}`;
-                    if (!activeFilters.has(stateKey)) continue;
+                    let isVisible = false;
+                    const keyA = `${group}_${vModeRaw}_A`;
+                    const keyB = `${group}_${vModeRaw}_B`;
+
+                    // 檢查完全匹配
+                    if (activeFilters.has(`${group}_${vModeRaw}_${vBA}`)) {
+                        isVisible = true;
+                    } 
+                    // 容錯機制：若 B/A 欄位遺失，只要該模式任一選項被勾選，依然顯示以防漏讀
+                    else if (vBA !== 'A' && vBA !== 'B') {
+                        if (activeFilters.has(keyA) || activeFilters.has(keyB)) {
+                            isVisible = true;
+                        }
+                    }
+
+                    if (!isVisible) continue;
 
                     const x = xAxis.getPixelForValue(i);
                     if (x < xAxis.left || x > xAxis.right) continue;
 
-                    const yTop = yAxis.top + 20 + (drawLevel * 28);
+                    // == 【更新】：尋找實際數據線的高度 (LC 優先, 否則 SC) ==
+                    let dataY = yAxis.bottom / 2; // 預設中間
+                    const metaLC = chart.getDatasetMeta(1);
+                    const metaSC = chart.getDatasetMeta(0);
                     
+                    if (chart.isDatasetVisible(1) && metaLC && metaLC.data[i] && !isNaN(metaLC.data[i].y)) {
+                        dataY = metaLC.data[i].y;
+                    } else if (chart.isDatasetVisible(0) && metaSC && metaSC.data[i] && !isNaN(metaSC.data[i].y)) {
+                        dataY = metaSC.data[i].y;
+                    }
+
+                    // 防呆：確保 dataY 在圖表範圍內
+                    dataY = Math.max(yAxis.top, Math.min(yAxis.bottom, dataY));
+
+                    // 計算繪圖位置：如果資料在圖表上半部，標籤就畫在資料點下方；反之畫在上方。
+                    let isTopHalf = (dataY - yAxis.top) < (yAxis.bottom - yAxis.top) / 2;
+                    let yTop = isTopHalf ? dataY + 25 + (drawLevel * 28) : dataY - 25 - (drawLevel * 28);
+                    
+                    // 防呆：確保文字不會畫出圖表外
+                    yTop = Math.max(yAxis.top + 15, Math.min(yAxis.bottom - 15, yTop));
+
                     const drawColor = VALVE_COLORS[group];
 
                     let isOverlapping = false;
@@ -423,8 +481,9 @@
                         }
                     }
 
+                    // == 【更新】：繪製絕對貫穿的垂直參考線 (Top to Bottom) ==
                     ctx.beginPath();
-                    ctx.moveTo(x, yTop);
+                    ctx.moveTo(x, yAxis.top);
                     ctx.lineTo(x, yAxis.bottom);
                     ctx.lineWidth = 1.5;
                     ctx.strokeStyle = drawColor;
@@ -436,13 +495,9 @@
                         const textLine1 = group;
                         const textLine2 = `${vModeRaw}(${vBA})`;
                         
-                        // 移除原有的白色背景塊，改為直接將文字畫在線上
-                        // 繪製第一行：閥件名稱 (保留該閥件專屬色)
+                        // 移除半透明白色背景，直接把文字乾淨地畫上去
                         ctx.fillStyle = drawColor;
                         ctx.fillText(textLine1, x, yTop - 1);
-
-                        // 繪製第二行：動作狀態 (保留該閥件專屬色)
-                        ctx.fillStyle = drawColor;
                         ctx.fillText(textLine2, x, yTop + 11);
                         
                         drawnBounds[drawLevel].push(x);
@@ -476,11 +531,12 @@
                         y: {
                             type: 'logarithmic',
                             position: 'left',
-                            min: 1e-6, 
-                            max: 1e4, 
+                            min: 1e-7, 
+                            max: 1e5,  
                             ticks: {
                                 color: '#2563eb',
                                 callback: function(value) {
+                                    if (value === 1e5) return '10⁵(Atm)';
                                     if (value === 1) return '10⁰';
                                     if (value === 1e-3) return '10⁻³';
                                     if (value === 1e-5) return '10⁻⁵';
@@ -500,7 +556,7 @@
                             ticks: {
                                 color: '#059669',
                                 callback: function(value) {
-                                    if (value === 1e5) return '10⁵ (Atm)';
+                                    if (value === 1e5) return '10⁵(Atm)';
                                     if (value === 100) return '10²';
                                     if (value === 1e-4) return '10⁻⁴';
                                     let log10 = Math.log10(value);
@@ -586,7 +642,6 @@
                 },
                 {
                     label: 'CLM',
-                    // 如果是 CG7300，就讓 CLM 數據皆為 NaN 以防畫出線條
                     data: currentMachineType === 'CG7300' ? globalData.map(() => NaN) : globalData.map(r => r.CLM_Pa),
                     borderColor: '#d97706', 
                     borderWidth: 1.5,
@@ -600,7 +655,7 @@
             chartInstance.data.datasets = datasets;
             
             chartInstance.update();
-            chartInstance.resetZoom(); // 確保每次載入或更新時，預設都是最遠 (Zoom Out) 的狀態
+            chartInstance.resetZoom(); 
             updateScrollBar(); 
             
             if (globalData.length > 0) {
@@ -609,7 +664,7 @@
             }
         }
 
-        // --- File Upload Logic (Dual Handlers with Preprocessor) ---
+        // --- File Upload Logic ---
         function handleFileUpload(e, machineType) {
             const file = e.target.files[0];
             if (!file) return;
@@ -618,7 +673,6 @@
             ui.fileNameDisplay.innerText = `${file.name} (${machineType})`;
             ui.loadingOverlay.classList.remove('hidden');
 
-            // 針對 CG7300 的特殊 UI 處理
             if (machineType === 'CG7300') {
                 ui.toggles.CLM.checked = false;
                 ui.toggles.CLM.disabled = true;
@@ -631,13 +685,11 @@
                 ui.labels.clmStatusText.classList.add('hidden');
             }
 
-            // 使用 FileReader 進行預處理，解決 CG7300 孤立時間行與空白分隔的問題
             const reader = new FileReader();
             reader.onload = function(event) {
                 const text = event.target.result;
                 let lines = text.split(/\r?\n/);
                 
-                // 1. 尋找真正的 Header 行 (包含 SC, LC, VALVE 等關鍵字)
                 let headerIndex = 0;
                 for (let i = 0; i < lines.length; i++) {
                     if (lines[i].includes('SC') && lines[i].includes('LC') && lines[i].includes('VALVE')) {
@@ -648,7 +700,6 @@
                 
                 let dataLines = lines.slice(headerIndex);
                 
-                // 2. 判斷分隔符號：如果沒有逗號，表示是空白/Tab分隔的格式，需將連續空白轉為逗號
                 if (dataLines.length > 0) {
                     const isCSV = dataLines[0].includes(',');
                     if (!isCSV) {
@@ -658,7 +709,6 @@
                 
                 const cleanedText = dataLines.join('\n');
 
-                // 3. 將清理後的文字交給 PapaParse 解析
                 Papa.parse(cleanedText, {
                     header: true,
                     skipEmptyLines: true,
@@ -687,14 +737,13 @@
 
         function processParsedData(dataArray, machineType) {
             globalData = dataArray.map(row => {
-                const scPa_raw = parseFloat(row.SC);
-                const lcPa_raw = parseFloat(row.LC);
-                // 針對可能沒有 CLM 欄位的 CG7300 做防呆，避免 NaN 錯誤
-                const clmPa_raw = row.CLM !== undefined ? parseFloat(row.CLM) : NaN;
+                const scPa_raw = parsePressure(row.SC);
+                const lcPa_raw = parsePressure(row.LC);
+                const clmPa_raw = row.CLM !== undefined ? parsePressure(row.CLM) : NaN;
 
-                row.SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-6) : null;
-                row.LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-6) : null;
-                row.CLM_Pa = !isNaN(clmPa_raw) ? Math.max(clmPa_raw, 1e-6) : null;
+                row.SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-7) : null;
+                row.LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-7) : null;
+                row.CLM_Pa = !isNaN(clmPa_raw) ? Math.max(clmPa_raw, 1e-7) : null;
                 
                 return row;
             }).filter(row => row.SC_Pa !== null && row.LC_Pa !== null);
@@ -731,19 +780,18 @@
             addRow("_AV3", "_CLOS", "B", 0, 0, 0, 0, 0);
             addRow("_AV3", "_CLOS", "A", 0, 0, 0, 0, 0);
             
-            // 加入 AV5-1 / AV5-2 密集訊號模擬
-            addRow("_AV5-1", "_OPEN", "B", 0, 0, 0, 1, 0);
+            addRow("_AV51", "_OPEN", "B", 0, 0, 0, 1, 0);
             addRow("_LV1", "_CLOS", "A", 0, 0, 0, 1, 0); 
-            addRow("_AV5-1", "_OPEN", "A", 0, 0, 0, 1, 0);
+            addRow("_AV51", "_OPEN", "A", 0, 0, 0, 1, 0);
 
             for(let i=0; i<25; i++) {
                 lc = lc * 0.5; if(lc < 5) lc = 5;
                 addRow("____", "_____", "_", 0, 0, 0, 1, 0);
             }
-            addRow("_AV5-1", "CLOSE", "B", 0, 0, 0, 0, 0); 
-            addRow("_AV5-1", "CLOSE", "A", 0, 0, 0, 0, 0);
-            addRow("_AV5-2", "_OPEN", "B", 0, 0, 0, 1, 0);
-            addRow("_AV5-2", "_OPEN", "A", 0, 0, 0, 1, 0);
+            addRow("_AV51", "CLOSE", "B", 0, 0, 0, 0, 0); 
+            addRow("_AV51", "CLOSE", "A", 0, 0, 0, 0, 0);
+            addRow("_AV52", "_OPEN", "B", 0, 0, 0, 1, 0);
+            addRow("_AV52", "_OPEN", "A", 0, 0, 0, 1, 0);
 
             addRow("_AV4", "_OPEN", "B", 0, 0, 1, 0, 0);
             addRow("_AV4", "_OPEN", "A", 0, 0, 1, 0, 0);
