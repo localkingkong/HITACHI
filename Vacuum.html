@@ -27,6 +27,12 @@
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
+        /* 圖表專用底部水平捲軸 */
+        #chartScrollContainer::-webkit-scrollbar { height: 12px; }
+        #chartScrollContainer::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; border: 1px solid #e2e8f0; }
+        #chartScrollContainer::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
+        #chartScrollContainer::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
         /* 隱藏預設 input checkbox 樣式，改用自訂色彩 */
         .custom-checkbox { accent-color: currentColor; }
     </style>
@@ -39,62 +45,74 @@
             <h1 class="text-xl font-bold text-blue-600 tracking-wide">Vacuum Analyzer</h1>
             <div class="h-6 w-px bg-gray-300"></div>
             
-            <!-- File Upload -->
-            <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold flex items-center gap-2">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                <span>Load Log</span>
-                <input type="file" id="fileInput" accept=".txt,.csv" class="hidden">
-            </label>
-            <span id="fileNameDisplay" class="text-gray-500 text-sm font-medium hidden md:inline">尚未載入檔案 (展示模式)</span>
+            <!-- Dual File Uploads for Different Machine Types -->
+            <div class="flex items-center space-x-2">
+                <!-- GT2000E Button -->
+                <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span>GT2000E</span>
+                    <input type="file" id="fileInputGT2000E" accept=".txt,.csv" class="hidden">
+                </label>
+                <!-- CG7300 Button -->
+                <label class="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span>CG7300</span>
+                    <input type="file" id="fileInputCG7300" accept=".txt,.csv" class="hidden">
+                </label>
+            </div>
+            
+            <span id="fileNameDisplay" class="text-gray-500 text-sm font-medium hidden md:inline ml-2">No file loaded (Demo Mode)</span>
         </div>
 
         <div class="flex items-center space-x-3">
-            <div class="text-xs text-gray-500 bg-gray-100 px-3 py-1.5 rounded border border-gray-200 hidden lg:block">
-                💡 提示：在圖表點擊可 <span class="text-purple-600 font-bold">固定下方數據列</span>｜拖曳或滾輪放大 X 軸
-            </div>
             <button id="btnResetZoom" class="bg-white hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold border border-gray-300 flex items-center gap-1">
                 <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
-                Reset
+                Reset Zoom
             </button>
         </div>
     </header>
 
-    <!-- Main Content Area: Flex Row for Chart (Left) + Sidebar (Right) -->
     <div class="flex flex-1 min-h-0 overflow-hidden">
         
         <!-- Left Column: Top Data Panel + Bottom Chart -->
         <main class="flex-1 flex flex-col relative min-w-0 border-r border-gray-200 bg-white">
             
-            <!-- Fixed Data Panel (上下兩列文字數據區) -->
+            <!-- Fixed Data Panel -->
             <section class="bg-gray-50 border-b border-gray-200 p-3 shrink-0 z-10 font-mono text-sm leading-relaxed whitespace-nowrap overflow-x-auto shadow-sm">
-                <!-- [游標] 即時滑動數據 -->
+                <!-- Hover -->
                 <div id="dataHover" class="text-blue-700 font-semibold">
-                    [游標] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
+                    [Hover] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
                 </div>
-                <!-- [固定] 點選鎖定數據 -->
+                <!-- Pinned -->
                 <div id="dataPinned" class="text-purple-700 font-semibold mt-1">
-                    [固定] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
+                    [Pinned] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
                 </div>
             </section>
 
             <!-- Canvas Chart Area -->
-            <div class="flex-1 relative p-4 bg-white">
-                <canvas id="vacuumChart"></canvas>
+            <div class="flex-1 relative pt-4 px-4 pb-2 bg-white flex flex-col min-h-0">
+                <div class="flex-1 relative min-h-0">
+                    <canvas id="vacuumChart"></canvas>
+                </div>
+                <!-- Scrollbar Container -->
+                <div id="chartScrollContainer" class="w-full overflow-x-auto overflow-y-hidden mt-1">
+                    <div id="chartScrollContent" class="h-[1px] w-full"></div>
+                </div>
             </div>
             
             <!-- Loading Overlay -->
             <div id="loadingOverlay" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center hidden z-40">
                 <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                <div class="text-blue-600 text-lg font-bold">正在解析龐大數據，請稍候...</div>
+                <div class="text-blue-600 text-lg font-bold">Parsing Data...</div>
             </div>
         </main>
 
         <!-- Right Column: Control Panel -->
         <aside class="w-72 bg-gray-50 flex flex-col shrink-0 overflow-y-auto">
             
-            <!-- Section 1: 數據線 (Data Lines) -->
+            <!-- Data Lines -->
             <div class="p-4 border-b border-gray-200">
-                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">數據線 (Data Lines)</h2>
+                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Data Lines</h2>
                 <div class="flex flex-col space-y-2 font-semibold text-sm">
                     <label class="flex items-center space-x-2 cursor-pointer text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors">
                         <input type="checkbox" id="toggleSC" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
@@ -104,62 +122,71 @@
                         <input type="checkbox" id="toggleLC" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
                         <span>LC</span>
                     </label>
-                    <label class="flex items-center space-x-2 cursor-pointer text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors">
+                    <label id="labelCLM" class="flex items-center space-x-2 cursor-pointer text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors">
                         <input type="checkbox" id="toggleCLM" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
-                        <span>CLM</span>
+                        <span>CLM <span id="clmStatusText" class="text-[10px] text-gray-400 font-normal hidden ml-1">(Unavailable in CG7300)</span></span>
                     </label>
                 </div>
             </div>
 
-            <!-- Section 2: 圖表標示閥件 (Valve Markers) -->
+            <!-- Valve Markers -->
             <div class="p-4">
-                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">圖表標示閥件</h2>
-                <p class="text-xs text-gray-500 mb-4 leading-relaxed">展開並勾選您要在圖表上標示的閥件動作。縮放圖表時，標籤會自動展開以防重疊。</p>
+                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Valve Markers</h2>
                 
                 <div class="flex flex-col space-y-4" id="valveFiltersContainer">
                     <!-- AV2 Group -->
                     <div class="filter-group">
-                        <div class="font-bold text-pink-600 text-sm border-b border-gray-200 pb-1 mb-2">AV2 </div>
+                        <div class="font-bold text-pink-600 text-sm border-b border-gray-200 pb-1 mb-2">AV2</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Open" data-ba="B" checked><span>Open(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Open" data-ba="B"><span>Open(B)</span></label>
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Close" data-ba="B" checked><span>Close(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Close" data-ba="B"><span>Close(B)</span></label>
                         </div>
                     </div>
                     <!-- AV3 Group -->
                     <div class="filter-group">
-                        <div class="font-bold text-cyan-600 text-sm border-b border-gray-200 pb-1 mb-2">AV3 </div>
+                        <div class="font-bold text-cyan-600 text-sm border-b border-gray-200 pb-1 mb-2">AV3</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Open" data-ba="B" checked><span>Open(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Open" data-ba="B"><span>Open(B)</span></label>
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Close" data-ba="B" checked><span>Close(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Close" data-ba="B"><span>Close(B)</span></label>
                         </div>
                     </div>
                     <!-- AV4 Group -->
                     <div class="filter-group">
-                        <div class="font-bold text-orange-600 text-sm border-b border-gray-200 pb-1 mb-2">AV4 </div>
+                        <div class="font-bold text-orange-600 text-sm border-b border-gray-200 pb-1 mb-2">AV4</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Open" data-ba="B" checked><span>Open(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Open" data-ba="B"><span>Open(B)</span></label>
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Close" data-ba="B" checked><span>Close(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Close" data-ba="B"><span>Close(B)</span></label>
                         </div>
                     </div>
-                    <!-- AV5 Group -->
+                    <!-- AV5-1 Group -->
                     <div class="filter-group">
-                        <div class="font-bold text-emerald-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5 </div>
+                        <div class="font-bold text-emerald-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-1</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5" data-m="Open" data-ba="B" checked><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5" data-m="Close" data-ba="B" checked><span>Close(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Open" data-ba="B"><span>Open(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Close" data-ba="B"><span>Close(B)</span></label>
+                        </div>
+                    </div>
+                    <!-- AV5-2 Group -->
+                    <div class="filter-group">
+                        <div class="font-bold text-teal-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-2</div>
+                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Open" data-ba="B"><span>Open(B)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
+                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Close" data-ba="B"><span>Close(B)</span></label>
                         </div>
                     </div>
                     <!-- LV Group (Default Unchecked) -->
                     <div class="filter-group">
-                        <div class="font-bold text-yellow-600 text-sm border-b border-gray-200 pb-1 mb-2">LV (Leak Valve)</div>
+                        <div class="font-bold text-yellow-600 text-sm border-b border-gray-200 pb-1 mb-2">LV</div>
                         <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Open" data-ba="A"><span>Open(A)</span></label>
                             <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Open" data-ba="B"><span>Open(B)</span></label>
@@ -177,9 +204,11 @@
         let globalData = [];
         let chartInstance = null;
         let pinnedRowData = null;
+        let currentMachineType = 'GT2000E'; // 預設機型
 
         const ui = {
-            fileInput: document.getElementById('fileInput'),
+            fileInputGT2000E: document.getElementById('fileInputGT2000E'),
+            fileInputCG7300: document.getElementById('fileInputCG7300'),
             fileNameDisplay: document.getElementById('fileNameDisplay'),
             loadingOverlay: document.getElementById('loadingOverlay'),
             btnResetZoom: document.getElementById('btnResetZoom'),
@@ -189,32 +218,31 @@
                 SC: document.getElementById('toggleSC'),
                 LC: document.getElementById('toggleLC'),
                 CLM: document.getElementById('toggleCLM')
+            },
+            labels: {
+                CLM: document.getElementById('labelCLM'),
+                clmStatusText: document.getElementById('clmStatusText')
             }
         };
 
-        // --- Configuration & Helpers ---
-        // 顏色定義對應各群組 (Light theme optimized)
         const VALVE_COLORS = {
-            'AV2': '#db2777', // pink-600
-            'AV3': '#0891b2', // cyan-600
-            'AV4': '#ea580c', // orange-600
-            'AV5': '#059669', // emerald-600
-            'LV':  '#ca8a04'  // yellow-600
+            'AV2': '#db2777', // pink
+            'AV3': '#0891b2', // cyan
+            'AV4': '#ea580c', // orange
+            'AV5-1': '#059669', // emerald
+            'AV5-2': '#0d9488', // teal
+            'LV':  '#ca8a04'  // yellow
         };
 
-        function getValveStateKey(vName, vMode, vBA) {
-            // 解析出前綴 (AV2, AV3 等) 以對應 Checkbox 的 data-v 屬性
-            let group = '';
-            if (vName.includes('AV2')) group = 'AV2';
-            else if (vName.includes('AV3')) group = 'AV3';
-            else if (vName.includes('AV4')) group = 'AV4';
-            else if (vName.includes('AV5')) group = 'AV5';
-            else if (vName.includes('LV')) group = 'LV';
-
-            return `${group}_${vMode}_${vBA}`;
+        // 精確解析 MODE
+        function parseCleanMode(rawMode) {
+            if (!rawMode) return '-----';
+            let clean = rawMode.replace(/_/g, '').trim().toUpperCase();
+            if (clean.includes('OPEN')) return 'Open';
+            if (clean.includes('CLOS')) return 'Close';
+            return clean;
         }
 
-        // --- Data String Formatter ---
         function formatDataString(prefix, row) {
             if (!row) return `[${prefix}] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -`;
             
@@ -222,25 +250,86 @@
             const timeStr = row.Time || '--:--:--';
             const scStr = row.SC_Pa ? row.SC_Pa.toExponential(1).toUpperCase() : '---';
             const lcStr = row.LC_Pa ? row.LC_Pa.toExponential(1).toUpperCase() : '---';
-            const clmStr = row.CLM_Pa ? row.CLM_Pa.toExponential(1).toUpperCase() : '---';
+            
+            // 如果機器類型是 CG7300 或找不到數值，則顯示 N/A
+            let clmStr = 'N/A';
+            if (currentMachineType !== 'CG7300' && row.CLM_Pa && !isNaN(row.CLM_Pa)) {
+                clmStr = row.CLM_Pa.toExponential(1).toUpperCase();
+            }
             
             const hasValveAct = row.VALVE && row.VALVE.trim() !== '____' && row.VALVE.trim() !== '';
             let vName = hasValveAct ? row.VALVE.replace(/_/g, '').trim() : '----';
             if (vName === '') vName = '----';
             
-            let vMode = hasValveAct && row.MODE ? row.MODE.replace(/_/g, '').trim().toUpperCase() : '-----';
-            if (vMode === 'OPEN') vMode = 'Open';
-            if (vMode === 'CLOS') vMode = 'Close';
-            if (vMode === '') vMode = '-----';
-
+            let vMode = hasValveAct ? parseCleanMode(row.MODE) : '-----';
             const vBA = hasValveAct && row['B/A'] ? row['B/A'].trim() : '-';
 
             return `[${prefix}] ${dateStr} ${timeStr} | SC: ${scStr} | LC: ${lcStr} | CLM: ${clmStr} | VALVE: ${vName}, MODE: ${vMode}, B/A: ${vBA}`;
         }
 
-        // --- Chart Plugins ---
+        let isSyncingLeft = false;
+        let isSyncingChart = false;
 
-        // 1. Transfer 背景 (使用淺灰色代替原本的深色背景)
+        function updateScrollBar() {
+            if (isSyncingChart || !chartInstance || globalData.length === 0) return;
+            isSyncingLeft = true;
+            
+            const xScale = chartInstance.scales.x;
+            const totalData = chartInstance.data.labels.length;
+            
+            const minIndex = Math.max(0, xScale.min !== undefined ? xScale.min : 0);
+            const maxIndex = Math.min(totalData - 1, xScale.max !== undefined ? xScale.max : totalData - 1);
+            
+            const visibleItems = (maxIndex - minIndex + 1);
+            const visibleRatio = visibleItems / totalData;
+            
+            const scrollContent = document.getElementById('chartScrollContent');
+            const scrollContainer = document.getElementById('chartScrollContainer');
+            
+            if (visibleRatio >= 0.999) {
+                scrollContent.style.width = '100%';
+                scrollContainer.scrollLeft = 0;
+            } else {
+                scrollContent.style.width = `${(1 / visibleRatio) * 100}%`;
+                const maxScrollLeft = scrollContent.offsetWidth - scrollContainer.offsetWidth;
+                const scrollRatio = minIndex / (totalData - visibleItems);
+                scrollContainer.scrollLeft = scrollRatio * maxScrollLeft;
+            }
+            
+            requestAnimationFrame(() => { setTimeout(() => isSyncingLeft = false, 20); });
+        }
+
+        document.getElementById('chartScrollContainer').addEventListener('scroll', (e) => {
+            if (isSyncingLeft || !chartInstance || globalData.length === 0) return;
+            isSyncingChart = true;
+            
+            const container = e.target;
+            const content = document.getElementById('chartScrollContent');
+            const maxScrollLeft = content.offsetWidth - container.offsetWidth;
+            
+            if (maxScrollLeft <= 0) {
+                isSyncingChart = false;
+                return;
+            }
+            
+            let scrollRatio = container.scrollLeft / maxScrollLeft;
+            scrollRatio = Math.max(0, Math.min(1, scrollRatio));
+            
+            const totalData = chartInstance.data.labels.length;
+            const xScale = chartInstance.scales.x;
+            const visibleItems = (xScale.max !== undefined ? xScale.max : totalData - 1) - (xScale.min !== undefined ? xScale.min : 0) + 1;
+            
+            const newMin = scrollRatio * (totalData - visibleItems);
+            const newMax = newMin + visibleItems - 1;
+            
+            chartInstance.options.scales.x.min = newMin;
+            chartInstance.options.scales.x.max = newMax;
+            chartInstance.update('none'); 
+            
+            requestAnimationFrame(() => { setTimeout(() => isSyncingChart = false, 20); });
+        });
+
+        // 1. Transfer 背景 
         const transferCyclePlugin = {
             id: 'transferCycleBg',
             beforeDraw: (chart) => {
@@ -250,7 +339,7 @@
                 const yAxis = chart.scales.y; 
                 
                 ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'; // 極淡的灰色陰影
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'; 
                 
                 let inTransfer = false;
                 let startX = 0;
@@ -274,7 +363,7 @@
             }
         };
 
-        // 2. 動態標籤繪製與【智慧防重疊演算法】
+        // 2. 動態錯排標籤繪製
         const nativeValveLabelsPlugin = {
             id: 'nativeValveLabels',
             afterDraw: (chart) => {
@@ -284,7 +373,6 @@
                 const xAxis = chart.scales.x;
                 const yAxis = chart.scales.y;
 
-                // 建立目前所有已勾選的篩選器 Set (格式：AV2_Open_A)
                 const activeFilters = new Set();
                 document.querySelectorAll('.valve-cb:checked').forEach(cb => {
                     activeFilters.add(`${cb.dataset.v}_${cb.dataset.m}_${cb.dataset.ba}`);
@@ -295,42 +383,38 @@
                 ctx.textBaseline = 'bottom';
                 ctx.font = 'bold 11px Arial, sans-serif';
 
-                // 用於防重疊：紀錄每個 Level 已經畫過的標籤 X 座標範圍
-                const drawnBounds = { 0:[], 1:[], 2:[], 3:[], 4:[] };
-                const MIN_DISTANCE = 60; // 允許文字不重疊的最小水平像素距離
+                const drawnBounds = { 0:[], 1:[], 2:[], 3:[], 4:[], 5:[] };
+                const MIN_DISTANCE = 40; 
 
                 for (let i = 0; i < globalData.length; i++) {
                     const row = globalData[i];
                     if (!row.VALVE || row.VALVE.trim() === '____' || row.VALVE.trim() === '') continue;
 
                     const vNameRaw = row.VALVE.replace(/_/g, '').trim().toUpperCase();
-                    let vModeRaw = row.MODE ? row.MODE.replace(/_/g, '').trim().toUpperCase() : '';
-                    if (vModeRaw === 'OPEN') vModeRaw = 'Open';
-                    if (vModeRaw === 'CLOS') vModeRaw = 'Close';
+                    const vModeRaw = parseCleanMode(row.MODE);
                     const vBA = row['B/A'] ? row['B/A'].trim().toUpperCase() : '';
 
-                    // 取得 Group Prefix 決定 Level 與色彩
                     let group = '';
                     let drawLevel = -1;
                     if (vNameRaw.includes('AV2')) { group = 'AV2'; drawLevel = 0; }
                     else if (vNameRaw.includes('AV3')) { group = 'AV3'; drawLevel = 1; }
                     else if (vNameRaw.includes('AV4')) { group = 'AV4'; drawLevel = 2; }
-                    else if (vNameRaw.includes('AV5')) { group = 'AV5'; drawLevel = 3; }
-                    else if (vNameRaw.includes('LV'))  { group = 'LV'; drawLevel = 4; }
+                    else if (vNameRaw.includes('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
+                    else if (vNameRaw.includes('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
+                    else if (vNameRaw.includes('LV'))  { group = 'LV'; drawLevel = 5; }
 
                     if (drawLevel === -1) continue;
 
-                    // 檢查是否符合勾選條件
                     const stateKey = `${group}_${vModeRaw}_${vBA}`;
                     if (!activeFilters.has(stateKey)) continue;
 
                     const x = xAxis.getPixelForValue(i);
                     if (x < xAxis.left || x > xAxis.right) continue;
 
-                    const yTop = yAxis.top + 15 + (drawLevel * 16);
+                    const yTop = yAxis.top + 20 + (drawLevel * 28);
+                    
                     const drawColor = VALVE_COLORS[group];
 
-                    // 【智慧防撞演算法】檢查此座標在此階層是否與先前的文字重疊
                     let isOverlapping = false;
                     for (let bound of drawnBounds[drawLevel]) {
                         if (Math.abs(bound - x) < MIN_DISTANCE) {
@@ -339,30 +423,29 @@
                         }
                     }
 
-                    // 繪製垂直參考線 (即便文字重疊也畫一條淡淡的線，以表示該處有訊號)
                     ctx.beginPath();
                     ctx.moveTo(x, yTop);
                     ctx.lineTo(x, yAxis.bottom);
-                    ctx.lineWidth = 1;
+                    ctx.lineWidth = 1.5;
                     ctx.strokeStyle = drawColor;
-                    ctx.globalAlpha = isOverlapping ? 0.15 : 0.4; 
+                    ctx.globalAlpha = isOverlapping ? 0.15 : 0.6; 
                     ctx.stroke();
 
-                    // 若不重疊，才繪製詳細文字
                     if (!isOverlapping) {
                         ctx.globalAlpha = 1.0;
+                        const textLine1 = group;
+                        const textLine2 = `${vModeRaw}(${vBA})`;
+                        
+                        // 移除原有的白色背景塊，改為直接將文字畫在線上
+                        // 繪製第一行：閥件名稱 (保留該閥件專屬色)
                         ctx.fillStyle = drawColor;
-                        const text = `${group} ${vModeRaw}(${vBA})`; // 簡化名稱，如 AV2 Open(A)
-                        
-                        // 畫背景白底以遮蓋格線，讓字更清楚
-                        const textWidth = ctx.measureText(text).width;
-                        ctx.fillStyle = 'rgba(255,255,255,0.8)';
-                        ctx.fillRect(x - textWidth/2 - 2, yTop - 12, textWidth + 4, 13);
-                        
+                        ctx.fillText(textLine1, x, yTop - 1);
+
+                        // 繪製第二行：動作狀態 (保留該閥件專屬色)
                         ctx.fillStyle = drawColor;
-                        ctx.fillText(text, x, yTop - 1);
+                        ctx.fillText(textLine2, x, yTop + 11);
                         
-                        drawnBounds[drawLevel].push(x); // 註記已使用的空間
+                        drawnBounds[drawLevel].push(x);
                     }
                 }
                 ctx.restore();
@@ -371,7 +454,6 @@
 
         Chart.register(transferCyclePlugin, nativeValveLabelsPlugin);
 
-        // --- Chart Initialization ---
         function initChart() {
             const ctx = document.getElementById('vacuumChart').getContext('2d');
             
@@ -389,16 +471,15 @@
                     scales: {
                         x: {
                             ticks: { color: '#64748b', maxTicksLimit: 15 },
-                            grid: { color: '#e2e8f0' } // Light theme grid
+                            grid: { color: '#e2e8f0' }
                         },
-                        // 主座標軸 (左側) : SC 與 CLM
                         y: {
                             type: 'logarithmic',
                             position: 'left',
                             min: 1e-6, 
                             max: 1e4, 
                             ticks: {
-                                color: '#2563eb', // text-blue-600
+                                color: '#2563eb',
                                 callback: function(value) {
                                     if (value === 1) return '10⁰';
                                     if (value === 1e-3) return '10⁻³';
@@ -411,14 +492,13 @@
                             grid: { color: '#e2e8f0' },
                             title: { display: true, text: 'SC / CLM', color: '#2563eb', font: { weight: 'bold'} }
                         },
-                        // 副座標軸 (右側) : LC
                         y1: {
                             type: 'logarithmic',
                             position: 'right',
                             min: 1e-10, 
                             max: 1e6,  
                             ticks: {
-                                color: '#059669', // text-emerald-600
+                                color: '#059669',
                                 callback: function(value) {
                                     if (value === 1e5) return '10⁵ (Atm)';
                                     if (value === 100) return '10²';
@@ -439,22 +519,27 @@
                             zoom: {
                                 wheel: { enabled: true, speed: 0.1 }, 
                                 drag: { enabled: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }, 
-                                mode: 'x' 
+                                mode: 'x',
+                                onZoom: updateScrollBar
                             },
-                            pan: { enabled: true, mode: 'x' }
+                            pan: { 
+                                enabled: true, 
+                                mode: 'x',
+                                onPan: updateScrollBar
+                            }
                         }
                     },
                     onHover: (e, activeElements) => {
                         if (activeElements.length > 0) {
                             const dataIndex = activeElements[0].index;
-                            ui.dataHover.innerText = formatDataString('游標', globalData[dataIndex]);
+                            ui.dataHover.innerText = formatDataString('Hover', globalData[dataIndex]);
                         }
                     },
                     onClick: (e, activeElements) => {
                         if (activeElements.length > 0) {
                             const dataIndex = activeElements[0].index;
                             pinnedRowData = globalData[dataIndex];
-                            ui.dataPinned.innerText = formatDataString('固定', pinnedRowData);
+                            ui.dataPinned.innerText = formatDataString('Pinned', pinnedRowData);
                         }
                     }
                 }
@@ -462,10 +547,12 @@
         }
 
         ui.btnResetZoom.addEventListener('click', () => {
-            if (chartInstance) chartInstance.resetZoom();
+            if (chartInstance) {
+                chartInstance.resetZoom();
+                updateScrollBar();
+            }
         });
 
-        // 綁定全部 Checkbox (數據線 + 閥件選項) 事件
         document.querySelectorAll('.custom-checkbox').forEach(cb => {
             cb.addEventListener('change', () => {
                 if(cb.id === 'toggleSC' && chartInstance) chartInstance.data.datasets[0].hidden = !cb.checked;
@@ -475,7 +562,6 @@
             });
         });
 
-        // --- Render UI ---
         function renderChart() {
             if (!chartInstance) initChart();
 
@@ -485,7 +571,7 @@
                 {
                     label: 'SC',
                     data: globalData.map(r => r.SC_Pa),
-                    borderColor: '#2563eb', // blue-600
+                    borderColor: '#2563eb', 
                     borderWidth: 1.5,
                     yAxisID: 'y', 
                     hidden: !ui.toggles.SC.checked
@@ -493,15 +579,16 @@
                 {
                     label: 'LC',
                     data: globalData.map(r => r.LC_Pa),
-                    borderColor: '#059669', // emerald-600
+                    borderColor: '#059669', 
                     borderWidth: 1.5,
                     yAxisID: 'y1', 
                     hidden: !ui.toggles.LC.checked
                 },
                 {
                     label: 'CLM',
-                    data: globalData.map(r => r.CLM_Pa),
-                    borderColor: '#d97706', // amber-600
+                    // 如果是 CG7300，就讓 CLM 數據皆為 NaN 以防畫出線條
+                    data: currentMachineType === 'CG7300' ? globalData.map(() => NaN) : globalData.map(r => r.CLM_Pa),
+                    borderColor: '#d97706', 
                     borderWidth: 1.5,
                     borderDash: [4, 4], 
                     yAxisID: 'y', 
@@ -513,40 +600,97 @@
             chartInstance.data.datasets = datasets;
             
             chartInstance.update();
+            chartInstance.resetZoom(); // 確保每次載入或更新時，預設都是最遠 (Zoom Out) 的狀態
+            updateScrollBar(); 
             
             if (globalData.length > 0) {
-                ui.dataHover.innerText = formatDataString('游標', globalData[0]);
-                if(!pinnedRowData) ui.dataPinned.innerText = formatDataString('固定', null);
+                ui.dataHover.innerText = formatDataString('Hover', globalData[0]);
+                if(!pinnedRowData) ui.dataPinned.innerText = formatDataString('Pinned', null);
             }
         }
 
-        // --- Data Loading & Parsing ---
-        ui.fileInput.addEventListener('change', (e) => {
+        // --- File Upload Logic (Dual Handlers with Preprocessor) ---
+        function handleFileUpload(e, machineType) {
             const file = e.target.files[0];
             if (!file) return;
 
-            ui.fileNameDisplay.innerText = file.name;
+            currentMachineType = machineType;
+            ui.fileNameDisplay.innerText = `${file.name} (${machineType})`;
             ui.loadingOverlay.classList.remove('hidden');
 
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                dynamicTyping: true, 
-                complete: function(results) {
-                    processParsedData(results.data);
-                },
-                error: function(err) {
-                    alert("檔案解析失敗: " + err.message);
-                    ui.loadingOverlay.classList.add('hidden');
-                }
-            });
-        });
+            // 針對 CG7300 的特殊 UI 處理
+            if (machineType === 'CG7300') {
+                ui.toggles.CLM.checked = false;
+                ui.toggles.CLM.disabled = true;
+                ui.labels.CLM.classList.add('opacity-40', 'cursor-not-allowed');
+                ui.labels.clmStatusText.classList.remove('hidden');
+            } else {
+                ui.toggles.CLM.checked = true;
+                ui.toggles.CLM.disabled = false;
+                ui.labels.CLM.classList.remove('opacity-40', 'cursor-not-allowed');
+                ui.labels.clmStatusText.classList.add('hidden');
+            }
 
-        function processParsedData(dataArray) {
+            // 使用 FileReader 進行預處理，解決 CG7300 孤立時間行與空白分隔的問題
+            const reader = new FileReader();
+            reader.onload = function(event) {
+                const text = event.target.result;
+                let lines = text.split(/\r?\n/);
+                
+                // 1. 尋找真正的 Header 行 (包含 SC, LC, VALVE 等關鍵字)
+                let headerIndex = 0;
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].includes('SC') && lines[i].includes('LC') && lines[i].includes('VALVE')) {
+                        headerIndex = i;
+                        break;
+                    }
+                }
+                
+                let dataLines = lines.slice(headerIndex);
+                
+                // 2. 判斷分隔符號：如果沒有逗號，表示是空白/Tab分隔的格式，需將連續空白轉為逗號
+                if (dataLines.length > 0) {
+                    const isCSV = dataLines[0].includes(',');
+                    if (!isCSV) {
+                        dataLines = dataLines.map(line => line.trim().replace(/\s+/g, ','));
+                    }
+                }
+                
+                const cleanedText = dataLines.join('\n');
+
+                // 3. 將清理後的文字交給 PapaParse 解析
+                Papa.parse(cleanedText, {
+                    header: true,
+                    skipEmptyLines: true,
+                    dynamicTyping: true, 
+                    complete: function(results) {
+                        processParsedData(results.data, machineType);
+                    },
+                    error: function(err) {
+                        alert("Error parsing file: " + err.message);
+                        ui.loadingOverlay.classList.add('hidden');
+                    }
+                });
+            };
+            
+            reader.onerror = function() {
+                alert("Failed to read file.");
+                ui.loadingOverlay.classList.add('hidden');
+            };
+
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+        ui.fileInputGT2000E.addEventListener('change', (e) => handleFileUpload(e, 'GT2000E'));
+        ui.fileInputCG7300.addEventListener('change', (e) => handleFileUpload(e, 'CG7300'));
+
+        function processParsedData(dataArray, machineType) {
             globalData = dataArray.map(row => {
                 const scPa_raw = parseFloat(row.SC);
                 const lcPa_raw = parseFloat(row.LC);
-                const clmPa_raw = parseFloat(row.CLM);
+                // 針對可能沒有 CLM 欄位的 CG7300 做防呆，避免 NaN 錯誤
+                const clmPa_raw = row.CLM !== undefined ? parseFloat(row.CLM) : NaN;
 
                 row.SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-6) : null;
                 row.LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-6) : null;
@@ -560,7 +704,6 @@
             ui.loadingOverlay.classList.add('hidden');
         }
 
-        // --- Mock Data Generation ---
         function generateMockData() {
             let mock = [];
             let timeSec = 0;
@@ -584,19 +727,24 @@
             };
 
             for(let i=0; i<15; i++) addRow("____", "_____", "_", 0, 1, 0, 0, 0);
+            
             addRow("_AV3", "_CLOS", "B", 0, 0, 0, 0, 0);
             addRow("_AV3", "_CLOS", "A", 0, 0, 0, 0, 0);
             
-            // 刻意製造非常密集的訊號模擬重疊狀況
-            addRow("_AV5", "_OPEN", "B", 0, 0, 0, 1, 0);
-            addRow("_LV1", "_CLOS", "A", 0, 0, 0, 1, 0); // 加入LV以測試
-            addRow("_AV5", "_OPEN", "A", 0, 0, 0, 1, 0);
+            // 加入 AV5-1 / AV5-2 密集訊號模擬
+            addRow("_AV5-1", "_OPEN", "B", 0, 0, 0, 1, 0);
+            addRow("_LV1", "_CLOS", "A", 0, 0, 0, 1, 0); 
+            addRow("_AV5-1", "_OPEN", "A", 0, 0, 0, 1, 0);
 
             for(let i=0; i<25; i++) {
                 lc = lc * 0.5; if(lc < 5) lc = 5;
                 addRow("____", "_____", "_", 0, 0, 0, 1, 0);
             }
-            addRow("_AV5", "_CLOS", "A", 0, 0, 0, 0, 0);
+            addRow("_AV5-1", "CLOSE", "B", 0, 0, 0, 0, 0); 
+            addRow("_AV5-1", "CLOSE", "A", 0, 0, 0, 0, 0);
+            addRow("_AV5-2", "_OPEN", "B", 0, 0, 0, 1, 0);
+            addRow("_AV5-2", "_OPEN", "A", 0, 0, 0, 1, 0);
+
             addRow("_AV4", "_OPEN", "B", 0, 0, 1, 0, 0);
             addRow("_AV4", "_OPEN", "A", 0, 0, 1, 0, 0);
             for(let i=0; i<25; i++) {
@@ -611,9 +759,10 @@
                 addRow("____", "_____", "_", 1, 0, 1, 0, 0);
             }
             sc = 3.65e-5; 
+            addRow("_AV2", "_CLOS", "B", 0, 0, 1, 0, 0);
             addRow("_AV2", "_CLOS", "A", 0, 0, 1, 0, 0);
             
-            processParsedData(mock);
+            processParsedData(mock, 'GT2000E');
         }
 
         window.onload = () => generateMockData();
