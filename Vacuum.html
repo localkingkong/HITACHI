@@ -238,12 +238,12 @@
         function parsePressure(val) {
             if (val === undefined || val === null || val === '') return NaN;
             const strVal = String(val).trim().toUpperCase();
-            if (strVal.includes('OVERRNG') || strVal === 'OVER') return 100000; // 視為大氣壓 1e5 Pa
-            if (strVal.includes('UNDRRNG') || strVal === 'UNDER') return 1e-7; // 視為高真空 1e-7 Pa
+            if (strVal.includes('OVERRNG') || strVal === 'OVER') return 100000; 
+            if (strVal.includes('UNDRRNG') || strVal === 'UNDER') return 1e-7; 
             return parseFloat(val);
         }
 
-        // 精確解析 MODE (容錯增強版)
+        // 精確解析 MODE
         function parseCleanMode(rawMode) {
             if (!rawMode) return '-----';
             let clean = String(rawMode).replace(/_/g, '').trim().toUpperCase();
@@ -256,15 +256,13 @@
         function parseCleanValveName(rawValve) {
             if (!rawValve) return '----';
             let vName = String(rawValve).replace(/_/g, '').trim().toUpperCase();
-            
-            // 強制映射
             if (vName.includes('AV51') || vName === '51') return 'AV5-1';
             if (vName.includes('AV52') || vName === '52') return 'AV5-2';
             if (vName === '____' || vName === '') return '----';
-            
             return vName;
         }
 
+        // --- 字串呈現格式化邏輯 ---
         function formatDataString(prefix, row) {
             if (!row) return `[${prefix}] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -`;
             
@@ -279,14 +277,21 @@
                 clmStr = row.CLM_Pa.toExponential(1).toUpperCase();
             }
             
-            const rawValveStr = row.VALVE !== null && row.VALVE !== undefined ? String(row.VALVE) : '';
-            const hasValveAct = rawValveStr.trim() !== '____' && rawValveStr.trim() !== '';
-            
-            const vName = hasValveAct ? parseCleanValveName(rawValveStr) : '----';
-            const vMode = hasValveAct ? parseCleanMode(row.MODE) : '-----';
-            const vBA = hasValveAct && row['B/A'] !== null && row['B/A'] !== undefined ? String(row['B/A']).trim() : '-';
+            // 處理被合併的 actions
+            let vNames = [], vModes = [], vBAs = [];
+            if (row.actions && row.actions.length > 0) {
+                row.actions.forEach(act => {
+                    vNames.push(parseCleanValveName(act.VALVE));
+                    vModes.push(parseCleanMode(act.MODE));
+                    vBAs.push(act['B/A'] !== null && act['B/A'] !== undefined ? String(act['B/A']).trim() : '-');
+                });
+            } else {
+                vNames.push('----');
+                vModes.push('-----');
+                vBAs.push('-');
+            }
 
-            return `[${prefix}] ${dateStr} ${timeStr} | SC: ${scStr} | LC: ${lcStr} | CLM: ${clmStr} | VALVE: ${vName}, MODE: ${vMode}, B/A: ${vBA}`;
+            return `[${prefix}] ${dateStr} ${timeStr} | SC: ${scStr} | LC: ${lcStr} | CLM: ${clmStr} | VALVE: ${vNames.join(', ')}, MODE: ${vModes.join(', ')}, B/A: ${vBAs.join(', ')}`;
         }
 
         let isSyncingLeft = false;
@@ -411,46 +416,12 @@
                 for (let i = 0; i < globalData.length; i++) {
                     const row = globalData[i];
                     
-                    const rawValveStr = row.VALVE !== null && row.VALVE !== undefined ? String(row.VALVE) : '';
-                    if (rawValveStr.trim() === '____' || rawValveStr.trim() === '') continue;
-
-                    const vNameRaw = parseCleanValveName(rawValveStr);
-                    const vModeRaw = parseCleanMode(row.MODE);
-                    const vBA = row['B/A'] !== null && row['B/A'] !== undefined ? String(row['B/A']).trim().toUpperCase() : '';
-
-                    let group = '';
-                    let drawLevel = -1;
-                    
-                    if (vNameRaw.startsWith('AV2')) { group = 'AV2'; drawLevel = 0; }
-                    else if (vNameRaw.startsWith('AV3')) { group = 'AV3'; drawLevel = 1; }
-                    else if (vNameRaw.startsWith('AV4')) { group = 'AV4'; drawLevel = 2; }
-                    else if (vNameRaw.startsWith('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
-                    else if (vNameRaw.startsWith('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
-                    else if (vNameRaw.startsWith('LV'))  { group = 'LV'; drawLevel = 5; }
-
-                    if (drawLevel === -1) continue;
-
-                    let isVisible = false;
-                    const keyA = `${group}_${vModeRaw}_A`;
-                    const keyB = `${group}_${vModeRaw}_B`;
-
-                    // 檢查完全匹配
-                    if (activeFilters.has(`${group}_${vModeRaw}_${vBA}`)) {
-                        isVisible = true;
-                    } 
-                    // 容錯機制：若 B/A 欄位遺失，只要該模式任一選項被勾選，依然顯示以防漏讀
-                    else if (vBA !== 'A' && vBA !== 'B') {
-                        if (activeFilters.has(keyA) || activeFilters.has(keyB)) {
-                            isVisible = true;
-                        }
-                    }
-
-                    if (!isVisible) continue;
+                    if (!row.actions || row.actions.length === 0) continue;
 
                     const x = xAxis.getPixelForValue(i);
                     if (x < xAxis.left || x > xAxis.right) continue;
 
-                    // == 【更新】：尋找實際數據線的高度 (LC 優先, 否則 SC) ==
+                    // == 尋找實際數據線的高度 (LC 優先, 否則 SC) ==
                     let dataY = yAxis.bottom / 2; // 預設中間
                     const metaLC = chart.getDatasetMeta(1);
                     const metaSC = chart.getDatasetMeta(0);
@@ -461,47 +432,79 @@
                         dataY = metaSC.data[i].y;
                     }
 
-                    // 防呆：確保 dataY 在圖表範圍內
                     dataY = Math.max(yAxis.top, Math.min(yAxis.bottom, dataY));
-
-                    // 計算繪圖位置：如果資料在圖表上半部，標籤就畫在資料點下方；反之畫在上方。
                     let isTopHalf = (dataY - yAxis.top) < (yAxis.bottom - yAxis.top) / 2;
-                    let yTop = isTopHalf ? dataY + 25 + (drawLevel * 28) : dataY - 25 - (drawLevel * 28);
-                    
-                    // 防呆：確保文字不會畫出圖表外
-                    yTop = Math.max(yAxis.top + 15, Math.min(yAxis.bottom - 15, yTop));
 
-                    const drawColor = VALVE_COLORS[group];
+                    // 因為已經合併成 actions，所以這裡要遍歷畫圖
+                    row.actions.forEach(act => {
+                        const rawValveStr = act.VALVE !== null && act.VALVE !== undefined ? String(act.VALVE) : '';
+                        if (rawValveStr.trim() === '____' || rawValveStr.trim() === '') return;
 
-                    let isOverlapping = false;
-                    for (let bound of drawnBounds[drawLevel]) {
-                        if (Math.abs(bound - x) < MIN_DISTANCE) {
-                            isOverlapping = true;
-                            break;
+                        const vNameRaw = parseCleanValveName(rawValveStr);
+                        const vModeRaw = parseCleanMode(act.MODE);
+                        const vBA = act['B/A'] !== null && act['B/A'] !== undefined ? String(act['B/A']).trim().toUpperCase() : '';
+
+                        let group = '';
+                        let drawLevel = -1;
+                        
+                        if (vNameRaw.startsWith('AV2')) { group = 'AV2'; drawLevel = 0; }
+                        else if (vNameRaw.startsWith('AV3')) { group = 'AV3'; drawLevel = 1; }
+                        else if (vNameRaw.startsWith('AV4')) { group = 'AV4'; drawLevel = 2; }
+                        else if (vNameRaw.startsWith('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
+                        else if (vNameRaw.startsWith('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
+                        else if (vNameRaw.startsWith('LV'))  { group = 'LV'; drawLevel = 5; }
+
+                        if (drawLevel === -1) return;
+
+                        let isVisible = false;
+                        const keyA = `${group}_${vModeRaw}_A`;
+                        const keyB = `${group}_${vModeRaw}_B`;
+
+                        if (activeFilters.has(`${group}_${vModeRaw}_${vBA}`)) {
+                            isVisible = true;
+                        } 
+                        else if (vBA !== 'A' && vBA !== 'B') {
+                            if (activeFilters.has(keyA) || activeFilters.has(keyB)) {
+                                isVisible = true;
+                            }
                         }
-                    }
 
-                    // == 【更新】：繪製絕對貫穿的垂直參考線 (Top to Bottom) ==
-                    ctx.beginPath();
-                    ctx.moveTo(x, yAxis.top);
-                    ctx.lineTo(x, yAxis.bottom);
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeStyle = drawColor;
-                    ctx.globalAlpha = isOverlapping ? 0.15 : 0.6; 
-                    ctx.stroke();
+                        if (!isVisible) return;
 
-                    if (!isOverlapping) {
-                        ctx.globalAlpha = 1.0;
-                        const textLine1 = group;
-                        const textLine2 = `${vModeRaw}(${vBA})`;
-                        
-                        // 移除半透明白色背景，直接把文字乾淨地畫上去
-                        ctx.fillStyle = drawColor;
-                        ctx.fillText(textLine1, x, yTop - 1);
-                        ctx.fillText(textLine2, x, yTop + 11);
-                        
-                        drawnBounds[drawLevel].push(x);
-                    }
+                        let yTop = isTopHalf ? dataY + 25 + (drawLevel * 28) : dataY - 25 - (drawLevel * 28);
+                        yTop = Math.max(yAxis.top + 15, Math.min(yAxis.bottom - 15, yTop));
+
+                        const drawColor = VALVE_COLORS[group];
+
+                        let isOverlapping = false;
+                        for (let bound of drawnBounds[drawLevel]) {
+                            if (Math.abs(bound - x) < MIN_DISTANCE) {
+                                isOverlapping = true;
+                                break;
+                            }
+                        }
+
+                        // 繪製垂直參考線 (即便重疊仍有淡淡的線條保留)
+                        ctx.beginPath();
+                        ctx.moveTo(x, yAxis.top);
+                        ctx.lineTo(x, yAxis.bottom);
+                        ctx.lineWidth = 1.5;
+                        ctx.strokeStyle = drawColor;
+                        ctx.globalAlpha = isOverlapping ? 0.15 : 0.6; 
+                        ctx.stroke();
+
+                        if (!isOverlapping) {
+                            ctx.globalAlpha = 1.0;
+                            const textLine1 = group;
+                            const textLine2 = `${vModeRaw}(${vBA})`;
+                            
+                            ctx.fillStyle = drawColor;
+                            ctx.fillText(textLine1, x, yTop - 1);
+                            ctx.fillText(textLine2, x, yTop + 11);
+                            
+                            drawnBounds[drawLevel].push(x);
+                        }
+                    });
                 }
                 ctx.restore();
             }
@@ -664,7 +667,7 @@
             }
         }
 
-        // --- File Upload Logic ---
+        // --- File Upload Logic (Dual Handlers with Preprocessor) ---
         function handleFileUpload(e, machineType) {
             const file = e.target.files[0];
             if (!file) return;
@@ -735,24 +738,58 @@
         ui.fileInputGT2000E.addEventListener('change', (e) => handleFileUpload(e, 'GT2000E'));
         ui.fileInputCG7300.addEventListener('change', (e) => handleFileUpload(e, 'CG7300'));
 
+        // --- Data Aggregation Engine (合併同秒數與真空值相同的數據) ---
         function processParsedData(dataArray, machineType) {
-            globalData = dataArray.map(row => {
-                const scPa_raw = parsePressure(row.SC);
-                const lcPa_raw = parsePressure(row.LC);
-                const clmPa_raw = row.CLM !== undefined ? parsePressure(row.CLM) : NaN;
+            let mergedData = [];
+            let lastRow = null;
 
-                row.SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-7) : null;
-                row.LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-7) : null;
-                row.CLM_Pa = !isNaN(clmPa_raw) ? Math.max(clmPa_raw, 1e-7) : null;
-                
-                return row;
-            }).filter(row => row.SC_Pa !== null && row.LC_Pa !== null);
+            dataArray.forEach(rawRow => {
+                const scPa_raw = parsePressure(rawRow.SC);
+                const lcPa_raw = parsePressure(rawRow.LC);
+                const clmPa_raw = rawRow.CLM !== undefined ? parsePressure(rawRow.CLM) : NaN;
 
+                const SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-7) : null;
+                const LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-7) : null;
+                const CLM_Pa = !isNaN(clmPa_raw) ? Math.max(clmPa_raw, 1e-7) : null;
+
+                if (SC_Pa === null || LC_Pa === null) return;
+
+                const rawValveStr = rawRow.VALVE !== null && rawRow.VALVE !== undefined ? String(rawRow.VALVE) : '';
+                const hasValveAct = rawValveStr.trim() !== '____' && rawValveStr.trim() !== '';
+                const action = hasValveAct ? {
+                    VALVE: rawRow.VALVE,
+                    MODE: rawRow.MODE,
+                    'B/A': rawRow['B/A']
+                } : null;
+
+                // 若時間戳相同且真空值未改變，則進行聚合 (Aggregation)
+                if (lastRow && lastRow.Time === rawRow.Time && lastRow.SC_Pa === SC_Pa && lastRow.LC_Pa === LC_Pa) {
+                    if (action) {
+                        lastRow.actions.push(action);
+                    }
+                    if (rawRow.AV3 === '1' || rawRow.AV3 === 1) lastRow.AV3 = 1;
+                } else {
+                    const newRow = {
+                        Date: rawRow.Date,
+                        Time: rawRow.Time,
+                        SC_Pa: SC_Pa,
+                        LC_Pa: LC_Pa,
+                        CLM_Pa: CLM_Pa,
+                        AV3: rawRow.AV3,
+                        actions: action ? [action] : []
+                    };
+                    mergedData.push(newRow);
+                    lastRow = newRow;
+                }
+            });
+
+            globalData = mergedData;
             pinnedRowData = null; 
             renderChart();
             ui.loadingOverlay.classList.add('hidden');
         }
 
+        // --- Mock Data ---
         function generateMockData() {
             let mock = [];
             let timeSec = 0;
@@ -760,55 +797,59 @@
             let lc = 1e5; 
             let clm = 1.51e-5; 
             
-            const addRow = (valve, mode, ba, av2, av3, av4, av5, lv1) => {
+            let currentScFluc = sc;
+            let currentClmFluc = clm;
+
+            const addRow = (valve, mode, ba, av2, av3, av4, av5, lv1, advanceTime = true) => {
                 const date = new Date(0, 0, 0, 5, Math.floor(timeSec/60), timeSec%60);
                 const tStr = date.toTimeString().split(' ')[0];
-                let scFluctuation = sc * (1 + (Math.random() * 0.1 - 0.05));
-                let clmFluctuation = clm * (1 + (Math.random() * 0.02 - 0.01));
 
                 mock.push({
                     Date: "2026/04/26", Time: tStr,
-                    SC: scFluctuation, LC: lc, CLM: clmFluctuation,
+                    SC: currentScFluc, LC: lc, CLM: currentClmFluc,
                     AV2: av2, AV3: av3, AV4: av4, "AV5-1": av5, LV1: lv1,
                     VALVE: valve, MODE: mode, "B/A": ba
                 });
-                timeSec++;
+                
+                if (advanceTime) {
+                    timeSec++;
+                    currentScFluc = sc * (1 + (Math.random() * 0.1 - 0.05));
+                    currentClmFluc = clm * (1 + (Math.random() * 0.02 - 0.01));
+                }
             };
 
             for(let i=0; i<15; i++) addRow("____", "_____", "_", 0, 1, 0, 0, 0);
             
-            addRow("_AV3", "_CLOS", "B", 0, 0, 0, 0, 0);
-            addRow("_AV3", "_CLOS", "A", 0, 0, 0, 0, 0);
+            addRow("_AV3", "_CLOS", "B", 0, 0, 0, 0, 0, false);
+            addRow("_AV3", "_CLOS", "A", 0, 0, 0, 0, 0, true);
             
-            addRow("_AV51", "_OPEN", "B", 0, 0, 0, 1, 0);
-            addRow("_LV1", "_CLOS", "A", 0, 0, 0, 1, 0); 
-            addRow("_AV51", "_OPEN", "A", 0, 0, 0, 1, 0);
+            // 測試聚合: 同一秒內連續多個動作
+            addRow("_AV51", "CLOSE", "B", 0, 0, 0, 0, 0, false); 
+            addRow("_AV52", "OPEN", "B", 0, 0, 0, 0, 0, false);
+            addRow("_AV51", "CLOSE", "A", 0, 0, 0, 0, 0, false);
+            addRow("_AV52", "OPEN", "A", 0, 0, 0, 0, 0, true);
 
             for(let i=0; i<25; i++) {
                 lc = lc * 0.5; if(lc < 5) lc = 5;
                 addRow("____", "_____", "_", 0, 0, 0, 1, 0);
             }
-            addRow("_AV51", "CLOSE", "B", 0, 0, 0, 0, 0); 
-            addRow("_AV51", "CLOSE", "A", 0, 0, 0, 0, 0);
-            addRow("_AV52", "_OPEN", "B", 0, 0, 0, 1, 0);
-            addRow("_AV52", "_OPEN", "A", 0, 0, 0, 1, 0);
-
-            addRow("_AV4", "_OPEN", "B", 0, 0, 1, 0, 0);
-            addRow("_AV4", "_OPEN", "A", 0, 0, 1, 0, 0);
+            
+            addRow("_AV4", "_OPEN", "B", 0, 0, 1, 0, 0, false);
+            addRow("_AV4", "_OPEN", "A", 0, 0, 1, 0, 0, true);
             for(let i=0; i<25; i++) {
                 lc = lc * 0.6; if(lc < 1e-4) lc = 1e-4; 
                 addRow("____", "_____", "_", 0, 0, 1, 0, 0);
             }
-            addRow("_AV2", "_OPEN", "B", 1, 0, 1, 0, 0);
+            addRow("_AV2", "_OPEN", "B", 1, 0, 1, 0, 0, false);
             sc = 6e-4; lc = 6e-4; 
-            addRow("_AV2", "_OPEN", "A", 1, 0, 1, 0, 0);
+            addRow("_AV2", "_OPEN", "A", 1, 0, 1, 0, 0, true);
             for(let i=0; i<15; i++) {
                 sc = sc * 0.7; lc = sc;
                 addRow("____", "_____", "_", 1, 0, 1, 0, 0);
             }
             sc = 3.65e-5; 
-            addRow("_AV2", "_CLOS", "B", 0, 0, 1, 0, 0);
-            addRow("_AV2", "_CLOS", "A", 0, 0, 1, 0, 0);
+            addRow("_AV2", "_CLOS", "B", 0, 0, 1, 0, 0, false);
+            addRow("_AV2", "_CLOS", "A", 0, 0, 1, 0, 0, true);
             
             processParsedData(mock, 'GT2000E');
         }
