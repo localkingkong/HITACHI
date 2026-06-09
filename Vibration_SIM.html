@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEM 多重干擾頻率與 CD 模擬器</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        slate: { 850: '#151e2e', 950: '#0b0f19' },
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 引入 React, ReactDOM, Babel CDN 以便在瀏覽器中直接解析 JSX -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* 自訂捲軸樣式 */
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #e2e8f0; margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <!-- React 應用的掛載點 -->
+    <div id="root"></div>
+
+    <!-- 將原先的 React 元件代碼寫在這裡，並用 text/babel 標記讓 Babel 解析 -->
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // 定義不同掃描模式對應的 畫面更新率 (Frame Rate, Hz)
+        const FRAME_RATES = { 'Slow': 4, 'TV': 60, 'TV2': 120, 'TV4': 240, 'TV8': 480 };
+
+        const getLineTime = (speed, resolution) => {
+            return (1 / FRAME_RATES[speed]) / resolution;
+        };
+
+        // 核心物理：真實 SEM 高斯邊緣平滑訊號模型
+        const getBaseSignal = (x) => {
+            const absX = Math.abs(x);
+            const I_trench = 40, I_top = 100, I_peak = 220;
+            const x_peak = 7.0;
+            const sigmaSq = 1.6230; 
+            if (absX >= x_peak) {
+                const dist = absX - x_peak;
+                return I_trench + (I_peak - I_trench) * Math.exp(-(dist * dist) / (2 * sigmaSq));
+            } else {
+                return I_top + (I_peak - I_top) * (0.5 - 0.5 * Math.cos(Math.PI * absX / x_peak));
+            }
+        };
+
+        // 1. 高擬真 Frequency Domain 曲線圖表
+        const RealisticFreqChart = ({ interferences, minX, maxX }) => {
+            const w = 400, h = 130, padX = 50, padY = 30; 
+            const mapX = (v) => {
+                const clampedV = Math.max(minX, Math.min(maxX, v));
+                const logV = Math.log10(clampedV);
+                return padX + ((logV - Math.log10(minX)) / (Math.log10(maxX) - Math.log10(minX))) * (w - padX * 2);
+            };
+            const mapY = (v) => (h - padY) - Math.min((v / 10), 1.1) * (h - padY * 2);
+
+            const generatePath = () => {
+                const points = [];
+                const steps = 300;
+                for (let i = 0; i <= steps; i++) {
+                    const xPos = padX + (i / steps) * (w - padX * 2);
+                    const logV = Math.log10(minX) + (i / steps) * (Math.log10(maxX) - Math.log10(minX));
+                    let totalAmp = 0;
+                    interferences.forEach(inf => {
+                        if (!inf.active) return;
+                        const centerLog = Math.log10(inf.freqHz);
+                        const dist = Math.abs(logV - centerLog);
+                        const spread = 0.035; 
+                        totalAmp += inf.amp * Math.exp(-(dist * dist) / (2 * spread * spread));
+                        const harmonicLog = Math.log10(inf.freqHz * 2);
+                        const dist2 = Math.abs(logV - harmonicLog);
+                        totalAmp += (inf.amp * 0.15) * Math.exp(-(dist2 * dist2) / (2 * spread * spread));
+                    });
+                    totalAmp += 0.2 + (Math.random() * 0.15);
+                    points.push(`${xPos},${mapY(totalAmp)}`);
+                }
+                return `M ${padX},${h - padY} L ${points.join(' L ')} L ${w - padX},${h - padY}`;
+            };
+
+            const ticks = [1, 10, 100, 1000, 10000, 100000, 1000000];
+            const formatNumber = (num) => num >= 1000 ? (num / 1000) + 'k' : num.toString();
+
+            return (
+                <div className="w-full h-[140px] shrink-0 bg-slate-900 rounded-lg border border-slate-700 flex flex-col items-center justify-center relative overflow-hidden">
+                    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full absolute inset-0 text-[10px]">
+                        <text x={w / 2} y={15} fill="#cbd5e1" textAnchor="middle" className="font-bold text-xs">Frequency Domain (時間頻譜)</text>
+                        {ticks.map(t => <line key={`g-${t}`} x1={mapX(t)} y1={padY-10} x2={mapX(t)} y2={h-padY} stroke="#334155" strokeDasharray="2,2" />)}
+                        <line x1={padX} y1={h - padY} x2={w - padX + 10} y2={h - padY} stroke="#475569" strokeWidth="2" />
+                        <line x1={padX} y1={padY - 15} x2={padX} y2={h - padY} stroke="#475569" strokeWidth="2" />
+                        <text x={15} y={h / 2} fill="#94a3b8" transform={`rotate(-90 15 ${h / 2})`} textAnchor="middle">Amp (nm)</text>
+                        <text x={padX - 5} y={mapY(10)} fill="#64748b" textAnchor="end" alignmentBaseline="middle">10</text>
+                        <text x={padX - 5} y={mapY(0)} fill="#64748b" textAnchor="end" alignmentBaseline="middle">0</text>
+                        {ticks.map(t => (
+                            <g key={t}>
+                                <line x1={mapX(t)} y1={h - padY} x2={mapX(t)} y2={h - padY + 4} stroke="#475569" />
+                                <text x={mapX(t)} y={h - padY + 12} fill="#64748b" textAnchor="middle">{formatNumber(t)}</text>
+                            </g>
+                        ))}
+                        <path d={generatePath()} fill="rgba(34, 211, 238, 0.2)" stroke="#06b6d4" strokeWidth="2" strokeLinejoin="round" />
+                    </svg>
+                </div>
+            );
+        };
+
+        // 2. 黑白黑 1D 亮度 Profile 與動態 CD 量測圖表
+        const SimulatedProfile = ({ interferences, scanSpeed, frames, resolution }) => {
+            const w = 400, h = 180, padX = 40, padY = 25;
+            const pointsCount = 350; 
+            const profile = new Float32Array(pointsCount);
+
+            const T_line = getLineTime(scanSpeed, resolution);
+            const T_frame = 1 / FRAME_RATES[scanSpeed];
+            const activeHoriz = interferences.filter(inf => inf.active && inf.dir === 'Horizontal');
+
+            let totalSamples = 0;
+            for (let f = 0; f < frames; f++) {
+                for (let y = 0; y < 100; y++) {
+                    const t = (y * (resolution/100)) * T_line + f * T_frame;
+                    let shiftX = 0;
+                    for (let i = 0; i < activeHoriz.length; i++) {
+                        shiftX += activeHoriz[i].amp * Math.sin(2 * Math.PI * activeHoriz[i].freqHz * t);
+                    }
+                    for (let i = 0; i < pointsCount; i++) {
+                        const x = -17.5 + i * 0.1;
+                        profile[i] += getBaseSignal(x - shiftX);
+                    }
+                    totalSamples++;
+                }
+            }
+
+            let minVal = Infinity, maxVal = -Infinity;
+            for (let i = 0; i < pointsCount; i++) {
+                profile[i] /= totalSamples;
+                if (profile[i] < minVal) minVal = profile[i];
+                if (profile[i] > maxVal) maxVal = profile[i];
+            }
+
+            const th20 = minVal + (maxVal - minVal) * 0.20;
+            const th50 = minVal + (maxVal - minVal) * 0.50;
+            const th80 = minVal + (maxVal - minVal) * 0.80;
+
+            const getCD = (threshold) => {
+                let leftX = null, rightX = null;
+                for (let i = 0; i < pointsCount - 1; i++) {
+                    if (profile[i] <= threshold && profile[i+1] > threshold) {
+                        const t = (threshold - profile[i]) / (profile[i+1] - profile[i]);
+                        leftX = -17.5 + (i + t) * 0.1; break;
+                    }
+                }
+                for (let i = pointsCount - 1; i > 0; i--) {
+                    if (profile[i] <= threshold && profile[i-1] > threshold) {
+                        const t = (threshold - profile[i]) / (profile[i-1] - profile[i]);
+                        rightX = -17.5 + (i - t) * 0.1; break;
+                    }
+                }
+                return (leftX !== null && rightX !== null) ? (rightX - leftX).toFixed(2) : 'N/A';
+            };
+
+            const cd20 = getCD(th20), cd50 = getCD(th50), cd80 = getCD(th80);
+
+            const yMargin = (maxVal - minVal) * 0.15 || 10;
+            const yMinDisp = Math.max(0, minVal - yMargin);
+            const yMaxDisp = maxVal + yMargin;
+
+            const mapX = (i) => padX + (i / pointsCount) * (w - padX * 2);
+            const mapY = (v) => (h - padY) - ((v - yMinDisp) / (yMaxDisp - yMinDisp)) * (h - padY * 2);
+            const pathD = `M ${mapX(0)},${mapY(profile[0])} ` + Array.from(profile).map((v, i) => `L ${mapX(i)},${mapY(v)}`).join(' ');
+
+            return (
+                <div className="w-full h-[190px] shrink-0 bg-slate-900 rounded-lg border border-slate-700 flex flex-col items-center justify-center relative overflow-hidden">
+                    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-full absolute inset-0 text-[10px]">
+                        <text x={w / 2} y={15} fill="#cbd5e1" textAnchor="middle" className="font-bold text-xs">1D Image Profile & CD Measurement</text>
+                        <line x1={padX} y1={h - padY} x2={w - padX + 10} y2={h - padY} stroke="#475569" strokeWidth="2" />
+                        <text x={padX} y={h - padY + 12} fill="#64748b" textAnchor="middle">-17.5 nm</text>
+                        <text x={w/2} y={h - padY + 12} fill="#64748b" textAnchor="middle">0 nm</text>
+                        <text x={w - padX} y={h - padY + 12} fill="#64748b" textAnchor="middle">+17.5 nm</text>
+                        <line x1={padX} y1={padY} x2={padX} y2={h - padY} stroke="#475569" strokeWidth="2" />
+                        <text x={padX - 5} y={mapY(maxVal)} fill="#94a3b8" textAnchor="end" alignmentBaseline="middle">{Math.round(maxVal)}</text>
+                        <line x1={padX} y1={mapY(maxVal)} x2={padX + 4} y2={mapY(maxVal)} stroke="#94a3b8" strokeWidth="1" />
+                        <text x={padX - 5} y={mapY(minVal)} fill="#94a3b8" textAnchor="end" alignmentBaseline="middle">{Math.round(minVal)}</text>
+                        <line x1={padX} y1={mapY(minVal)} x2={padX + 4} y2={mapY(minVal)} stroke="#94a3b8" strokeWidth="1" />
+                        <text x={15} y={h / 2} fill="#64748b" transform={`rotate(-90 15 ${h / 2})`} textAnchor="middle">Intensity</text>
+                        <path d={pathD} fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinejoin="round" />
+                        {[
+                            { y: th80, label: 'Th80 (80%)', cd: cd80, color: '#f87171' },
+                            { y: th50, label: 'Th50 (50%)', cd: cd50, color: '#a78bfa' },
+                            { y: th20, label: 'Th20 (20%)', cd: cd20, color: '#4ade80' }
+                        ].map((th, idx) => (
+                            <g key={idx}>
+                                <line x1={padX} y1={mapY(th.y)} x2={w - padX} y2={mapY(th.y)} stroke={th.color} strokeDasharray="3,3" strokeWidth="1" opacity="0.8" />
+                                <text x={w - padX + 5} y={mapY(th.y)} fill={th.color} fontSize="9" alignmentBaseline="middle">
+                                    {th.label}: {th.cd} nm
+                                </text>
+                            </g>
+                        ))}
+                    </svg>
+                </div>
+            );
+        };
+
+        // 3. 2D FFT 模擬圖像生成元件
+        const SimulatedFFT = ({ interferences, frameRate, resolution, fovNm, hasCustomImage }) => {
+            const canvasRef = useRef(null);
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                const size = 256;
+                const cx = size / 2, cy = size / 2;
+                
+                const imgData = ctx.createImageData(size, size);
+                for (let i = 0; i < imgData.data.length; i += 4) {
+                    const v = 30 + Math.random() * 40;
+                    imgData.data[i] = v; imgData.data[i+1] = v; imgData.data[i+2] = v; imgData.data[i+3] = 255;
+                }
+                ctx.putImageData(imgData, 0, 0);
+
+                const drawPoint = (x, y, intensity, width, height) => {
+                    const grad = ctx.createRadialGradient(x, y, 0, x, y, width);
+                    grad.addColorStop(0, `rgba(255, 255, 255, ${intensity})`);
+                    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(x - width, y - height, width * 2, height * 2);
+                };
+
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.fillRect(cx - 1, 0, 2, size); ctx.fillRect(0, cy - 1, size, 2);
+                drawPoint(cx, cy, 1, 8, 8); 
+
+                if (!hasCustomImage) {
+                    const baseKx = (fovNm / 35) / (resolution / 2) * (size / 2);
+                    drawPoint(cx + baseKx, cy, 0.8, 4, 8); drawPoint(cx - baseKx, cy, 0.8, 4, 8);
+                    drawPoint(cx + baseKx * 2, cy, 0.4, 3, 6); drawPoint(cx - baseKx * 2, cy, 0.4, 3, 6);
+                }
+
+                const T_frame = 1 / frameRate;
+                const T_line = T_frame / resolution;
+
+                interferences.forEach(inf => {
+                    if (!inf.active || inf.amp <= 0) return;
+                    let kx_cycles = inf.freqHz * T_line;
+                    let ky_cycles = inf.freqHz * T_frame;
+
+                    let normX = (kx_cycles % (resolution / 2)) / (resolution / 2);
+                    let normY = (ky_cycles % (resolution / 2)) / (resolution / 2);
+                    if (Math.floor(kx_cycles / (resolution / 2)) % 2 !== 0) normX = 1 - normX; 
+                    if (Math.floor(ky_cycles / (resolution / 2)) % 2 !== 0) normY = 1 - normY; 
+
+                    const px = cx + normX * (size / 2); const py = cy + normY * (size / 2);
+                    const px_sym = cx - normX * (size / 2); const py_sym = cy - normY * (size / 2);
+
+                    const dist = Math.sqrt(normX*normX + normY*normY);
+                    const intensity = Math.min(inf.amp / 5, 1) * 0.9;
+                    const pointSize = dist < 0.05 ? 6 : 4; const pointHeight = dist < 0.05 ? 6 : 15;
+
+                    drawPoint(px, py, intensity, pointSize, pointHeight);
+                    drawPoint(px_sym, py_sym, intensity, pointSize, pointHeight);
+                });
+            }, [interferences, frameRate, resolution, fovNm, hasCustomImage]);
+
+            return (
+                <div className="w-full flex-1 min-h-[180px] bg-slate-900 rounded-lg border border-slate-700 flex flex-col items-center p-2">
+                    <h3 className="text-[#cbd5e1] font-bold text-sm mb-2">Spatial Domain (2D FFT 模擬)</h3>
+                    <div className="flex-1 w-full flex items-center justify-center bg-black rounded overflow-hidden relative">
+                        <canvas ref={canvasRef} width={256} height={256} className="h-[90%] aspect-square object-contain border border-slate-800" />
+                    </div>
+                </div>
+            );
+        };
+
+        // 主應用元件
+        const App = () => {
+            const [resolution, setResolution] = useState(1024);
+            const [scanSpeed, setScanSpeed] = useState('TV4');
+            const [frames, setFrames] = useState(1); 
+            const [magK, setMagK] = useState(250);
+            const [hasCustomImage, setHasCustomImage] = useState(false);
+            
+            const fovNm = 100000 / magK;
+
+            const [interferences, setInterferences] = useState([
+                { id: 1, active: true,  amp: 2.5, freqHz: 177000, dir: 'Horizontal' },
+                { id: 2, active: false, amp: 1.5, freqHz: 60,     dir: 'Horizontal' },
+                { id: 3, active: false, amp: 1.0, freqHz: 3000,   dir: 'Vertical' }
+            ]);
+            
+            const srcCanvasRef = useRef(null);
+            const dispCanvasRef = useRef(null);
+            const customImgRef = useRef(null);
+            const fileInputRef = useRef(null);
+
+            const generateBaseImage = useCallback(() => {
+                const canvas = srcCanvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                canvas.width = resolution; canvas.height = resolution;
+
+                if (customImgRef.current) {
+                    ctx.drawImage(customImgRef.current, 0, 0, resolution, resolution);
+                    return;
+                }
+
+                const S_px = fovNm / resolution;
+                const pitch_nm = 35;
+
+                const imgData = ctx.createImageData(resolution, resolution);
+                const d = imgData.data;
+                const row = new Float32Array(resolution);
+
+                for (let x = 0; x < resolution; x++) {
+                    let x_nm = x * S_px;
+                    let mod = x_nm % pitch_nm;
+                    let distNm = mod > pitch_nm / 2 ? pitch_nm - mod : mod;
+                    row[x] = getBaseSignal(distNm);
+                }
+
+                for (let y = 0; y < resolution; y++) {
+                    for (let x = 0; x < resolution; x++) {
+                        let val = row[x] + (Math.random() - 0.5) * 30;
+                        val = Math.max(0, Math.min(255, val));
+                        const idx = (y * resolution + x) * 4;
+                        d[idx] = val; d[idx+1] = val; d[idx+2] = val; d[idx+3] = 255;
+                    }
+                }
+                ctx.putImageData(imgData, 0, 0);
+            }, [resolution, fovNm]);
+
+            const applyInterference = useCallback(() => {
+                const srcCanvas = srcCanvasRef.current;
+                const dispCanvas = dispCanvasRef.current;
+                if (!srcCanvas || !dispCanvas) return;
+
+                dispCanvas.width = resolution; dispCanvas.height = resolution;
+                const ctxDisp = dispCanvas.getContext('2d');
+                const ctxSrc = srcCanvas.getContext('2d');
+
+                const srcDataObj = ctxSrc.getImageData(0, 0, resolution, resolution);
+                const srcD = srcDataObj.data;
+                const dispDataObj = ctxDisp.createImageData(resolution, resolution);
+                const dispD = dispDataObj.data;
+
+                const S_px = fovNm / resolution;
+                const T_line = getLineTime(scanSpeed, resolution);
+                const T_px = T_line / resolution;
+                const T_frame = 1 / FRAME_RATES[scanSpeed];
+
+                const activeInfs = interferences.filter(inf => inf.active).map(inf => ({
+                    A_px: inf.amp / S_px, omega: 2 * Math.PI * inf.freqHz, isHoriz: inf.dir === 'Horizontal'
+                }));
+
+                const accD = new Float32Array(resolution * resolution);
+
+                for (let f = 0; f < frames; f++) {
+                    const frameTimeOffset = f * T_frame;
+                    for (let y = 0; y < resolution; y++) {
+                        const lineTime = y * T_line + frameTimeOffset;
+                        for (let x = 0; x < resolution; x++) {
+                            const t = lineTime + x * T_px;
+                            let shiftX = 0, shiftY = 0;
+                            for (let i = 0; i < activeInfs.length; i++) {
+                                const shift = activeInfs[i].A_px * Math.sin(activeInfs[i].omega * t);
+                                if (activeInfs[i].isHoriz) shiftX += shift; else shiftY += shift;
+                            }
+                            let readX = Math.round(x - shiftX), readY = Math.round(y - shiftY);
+                            if (readX < 0) readX = 0; else if (readX >= resolution) readX = resolution - 1;
+                            if (readY < 0) readY = 0; else if (readY >= resolution) readY = resolution - 1;
+
+                            accD[y * resolution + x] += srcD[(readY * resolution + readX) * 4];
+                        }
+                    }
+                }
+
+                for (let i = 0; i < resolution * resolution; i++) {
+                    const val = accD[i] / frames;
+                    const idx = i * 4;
+                    dispD[idx] = val; dispD[idx+1] = val; dispD[idx+2] = val; dispD[idx+3] = 255;
+                }
+                ctxDisp.putImageData(dispDataObj, 0, 0);
+            }, [resolution, scanSpeed, interferences, fovNm, frames]);
+
+            useEffect(() => { generateBaseImage(); }, [generateBaseImage]);
+            useEffect(() => { applyInterference(); }, [applyInterference, generateBaseImage]);
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    customImgRef.current = img; setHasCustomImage(true);
+                    generateBaseImage(); URL.revokeObjectURL(url);
+                };
+                img.src = url;
+            };
+            const clearCustomImage = () => {
+                customImgRef.current = null;
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                setHasCustomImage(false); generateBaseImage();
+            };
+            const updateInterference = (id, field, value) => {
+                setInterferences(prev => prev.map(inf => inf.id === id ? { ...inf, [field]: value } : inf));
+            };
+
+            return (
+                <div className="min-h-screen p-4 font-sans flex flex-col items-center">
+                    <header className="mb-4 flex items-end gap-3 border-b border-slate-800 pb-3 w-full max-w-[1400px]">
+                        <h1 className="text-2xl font-bold text-cyan-400 tracking-wide">SEM CD 與干擾動態模擬器</h1>
+                        <p className="text-slate-500 text-sm mb-1">Advanced Fast Scan, Multi-Frame & CD Metrology</p>
+                    </header>
+
+                    <canvas ref={srcCanvasRef} className="hidden" />
+
+                    <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-6 w-full max-w-[1400px]">
+                        
+                        <div className="flex flex-col gap-4">
+                            <div className="bg-slate-900 border border-slate-700 p-2 rounded-xl shadow-2xl flex flex-col items-center">
+                                <div className="relative w-full max-w-[480px] aspect-square bg-black rounded overflow-hidden">
+                                    <canvas ref={dispCanvasRef} className="w-full h-full object-contain filter contrast-125" />
+                                    <div className="absolute bottom-2 right-2 bg-black/70 text-cyan-300 text-[10px] px-2 py-1 rounded border border-cyan-800 font-mono">
+                                        {Math.round(fovNm)} nm | {resolution}px | {frames} Frame(s)
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-slate-900 border border-slate-700 p-4 rounded-xl flex flex-col gap-4">
+                                <div className="grid grid-cols-2 gap-4 border-b border-slate-800 pb-4">
+                                    <label className="flex flex-col gap-1 text-sm text-slate-400">
+                                        <span>影像解析度 (Pixels)</span>
+                                        <select value={resolution} onChange={(e) => setResolution(Number(e.target.value))} className="bg-slate-800 border border-slate-700 rounded p-1.5 text-white outline-none focus:border-cyan-500">
+                                            <option value={512}>512 × 512</option>
+                                            <option value={1024}>1024 × 1024</option>
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-sm text-slate-400">
+                                        <span>掃描速率 (Scan Speed)</span>
+                                        <select value={scanSpeed} onChange={(e) => setScanSpeed(e.target.value)} className="bg-slate-800 border border-slate-700 rounded p-1.5 text-white outline-none focus:border-cyan-500">
+                                            <option value="Slow">Slow (4 Hz)</option>
+                                            <option value="TV">TV (60 Hz)</option>
+                                            <option value="TV2">TV2 (120 Hz)</option>
+                                            <option value="TV4">TV4 (240 Hz)</option>
+                                            <option value="TV8">TV8 (480 Hz)</option>
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-sm text-slate-400">
+                                        <span className="flex justify-between">影像倍率<span className="text-cyan-600 font-mono">FOV: {Math.round(fovNm)} nm</span></span>
+                                        <div className="flex items-center gap-2">
+                                            <input type="number" min="10" step="10" value={magK} onChange={(e) => setMagK(Number(e.target.value))} className="flex-1 bg-slate-800 border border-slate-700 rounded p-1.5 text-white font-mono" />
+                                            <span>kX</span>
+                                        </div>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-sm text-slate-400">
+                                        <span className="text-yellow-400 font-bold">積分畫格數 (Frames Accumulation)</span>
+                                        <select value={frames} onChange={(e) => setFrames(Number(e.target.value))} className="bg-slate-800 border border-yellow-700 rounded p-1.5 text-yellow-300 outline-none focus:border-yellow-500">
+                                            <option value={1}>1 Frame (即時掃描)</option>
+                                            <option value={2}>2 Frames</option>
+                                            <option value={4}>4 Frames</option>
+                                            <option value={8}>8 Frames</option>
+                                            <option value={16}>16 Frames (長積分去噪)</option>
+                                        </select>
+                                    </label>
+                                    <label className="flex flex-col gap-1 text-sm text-slate-400 justify-start col-span-2">
+                                        <span className="flex justify-between items-center">
+                                            載入自訂圖片
+                                            {hasCustomImage && <button onClick={clearCustomImage} className="text-[10px] bg-red-900/50 hover:bg-red-800 text-red-200 px-2 py-0.5 rounded border border-red-800 transition-colors">清除圖片</button>}
+                                        </span>
+                                        <input ref={fileInputRef} type="file" accept="image/*" onChange={handleImageUpload} className="text-xs file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-cyan-900 file:text-cyan-100 hover:file:bg-cyan-800 cursor-pointer pt-1" />
+                                    </label>
+                                </div>
+
+                                <div className="flex flex-col gap-3 max-h-[220px] overflow-y-auto pr-2 custom-scrollbar">
+                                    {interferences.map((inf, idx) => (
+                                        <div key={inf.id} className={`p-3 rounded-lg border ${inf.active ? 'bg-slate-800/80 border-cyan-700' : 'bg-slate-800/30 border-slate-700 opacity-60'} transition-all`}>
+                                            <div className="flex justify-between items-center mb-3">
+                                                <label className="flex items-center gap-2 cursor-pointer">
+                                                    <input type="checkbox" checked={inf.active} onChange={(e) => updateInterference(inf.id, 'active', e.target.checked)} className="accent-cyan-500 w-4 h-4" />
+                                                    <span className={`font-bold ${inf.active ? 'text-cyan-400' : 'text-slate-500'}`}>干擾源 {idx + 1}</span>
+                                                </label>
+                                                <select disabled={!inf.active} value={inf.dir} onChange={(e) => updateInterference(inf.id, 'dir', e.target.value)} className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-300">
+                                                    <option value="Horizontal">水平</option><option value="Vertical">垂直</option>
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-6">
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-[11px] text-slate-400">震幅 (nm)</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <input disabled={!inf.active} type="range" min="0" max="10" step="0.1" value={inf.amp} onChange={(e) => updateInterference(inf.id, 'amp', Number(e.target.value))} className="w-full accent-cyan-500" />
+                                                        <input disabled={!inf.active} type="number" min="0" step="0.1" value={inf.amp} onChange={(e) => updateInterference(inf.id, 'amp', Number(e.target.value))} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 font-mono text-right" />
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col gap-2">
+                                                    <span className="text-[11px] text-slate-400">時間頻率 (Hz)</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <input disabled={!inf.active} type="range" min={Math.log10(5)} max={Math.log10(500000)} step="0.01" value={Math.log10(inf.freqHz)} onChange={(e) => updateInterference(inf.id, 'freqHz', Math.pow(10, Number(e.target.value)))} className="w-full accent-cyan-500" />
+                                                        <input disabled={!inf.active} type="number" min="5" max="500000" value={Math.round(inf.freqHz)} onChange={(e) => updateInterference(inf.id, 'freqHz', Number(e.target.value))} className="w-24 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-cyan-300 font-mono text-right" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-4">
+                            <RealisticFreqChart interferences={interferences} minX={1} maxX={1000000} />
+                            <SimulatedProfile interferences={interferences} scanSpeed={scanSpeed} frames={frames} resolution={resolution} />
+                            <SimulatedFFT interferences={interferences} frameRate={FRAME_RATES[scanSpeed]} resolution={resolution} fovNm={fovNm} hasCustomImage={hasCustomImage} />
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
