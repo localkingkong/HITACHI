@@ -68,15 +68,43 @@
   </div>
   <div class="p-4">
     <h2 class="text-sm font-bold text-gray-700 uppercase mb-3">Valve Markers</h2>
-    <div class="grid grid-cols-2 gap-2 text-xs">
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV2" checked>AV2</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV3" checked>AV3</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV4" checked>AV4</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV5-1" checked>AV5-1</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV5-2" checked>AV5-2</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="LV" checked>LV</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV6" checked>AV6</label>
-      <label><input type="checkbox" class="valveGroup mr-1" value="AV7" checked>AV7</label>
+    <div class="flex flex-col space-y-4" id="valveFiltersContainer">
+      <div class="filter-group"><div class="font-bold text-pink-600 text-sm border-b border-gray-200 pb-1 mb-2">AV2</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV2" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV2" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV2" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV2" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-cyan-600 text-sm border-b border-gray-200 pb-1 mb-2">AV3</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV3" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV3" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV3" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV3" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-orange-600 text-sm border-b border-gray-200 pb-1 mb-2">AV4</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV4" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV4" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV4" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV4" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-emerald-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-1</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-1" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-1" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-1" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-1" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-teal-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-2</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-2" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-2" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-2" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-2" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-indigo-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-X</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-X" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-X" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-X" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV5-X" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-yellow-600 text-sm border-b border-gray-200 pb-1 mb-2">LV</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="LV" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="LV" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="LV" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="LV" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-violet-600 text-sm border-b border-gray-200 pb-1 mb-2">AV6</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV6" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV6" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV6" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV6" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
+      <div class="filter-group"><div class="font-bold text-purple-600 text-sm border-b border-gray-200 pb-1 mb-2">AV7</div><div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV7" data-m="Open" data-ba="A" checked>Open(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV7" data-m="Open" data-ba="B">Open(B)</label>
+        <label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV7" data-m="Close" data-ba="A" checked>Close(A)</label><label><input type="checkbox" class="valve-cb custom-checkbox mr-1" data-v="AV7" data-m="Close" data-ba="B">Close(B)</label>
+      </div></div>
     </div>
   </div>
 </aside>
@@ -102,7 +130,7 @@ const ui={
  labelCLM:document.getElementById('labelCLM'), clmStatusText:document.getElementById('clmStatusText')
 };
 
-const VALVE_COLORS={'AV2':'#db2777','AV3':'#0891b2','AV4':'#ea580c','AV5-1':'#059669','AV5-2':'#0d9488','LV':'#ca8a04','AV6':'#7c3aed','AV7':'#9333ea'};
+const VALVE_COLORS={'AV2':'#db2777','AV3':'#0891b2','AV4':'#ea580c','AV5-1':'#059669','AV5-2':'#0d9488','AV5-X':'#4f46e5','LV':'#ca8a04','AV6':'#7c3aed','AV7':'#9333ea'};
 const TMP_STATE={0:'STOP',1:'ACCEL',2:'RUN',8:'DECEL'};
 const TMP_COLOR={STOP:'#cbd5e1',ACCEL:'#f59e0b',RUN:'#16a34a',DECEL:'#ef4444',UNKNOWN:'#94a3b8'};
 
@@ -118,6 +146,7 @@ function cleanValve(v){
  let s=String(v).replace(/_/g,'').trim().toUpperCase();
  if(s.includes('AV51'))return 'AV5-1';
  if(s.includes('AV52'))return 'AV5-2';
+ if(s.includes('AV5X'))return 'AV5-X';
  if(s.startsWith('LV'))return s;
  return s||'----';
 }
@@ -127,6 +156,11 @@ function cleanMode(v){
  if(s.includes('OPEN')||s==='ON')return 'Open';
  if(s.includes('CLOS')||s.includes('SHUT')||s==='OFF')return 'Close';
  return s;
+}
+function cleanBA(v){
+ if(v===undefined||v===null)return '-';
+ const s=String(v).replace(/_/g,'').trim().toUpperCase();
+ return (s==='A'||s==='B')?s:'-';
 }
 function normalizeHex(v){
  if(v===undefined||v===null||v==='')return null;
@@ -151,24 +185,27 @@ function formatPressure(v){return v!==null&&!isNaN(v)?Number(v).toExponential(1)
 function formatDataString(prefix,row){
  if(!row)return `[${prefix}] ----`;
  const t12=decodeTMP12(row.TMP12), t3=decodeTMP3(row.TMP3);
- const acts=(row.actions||[]).map(a=>`${cleanValve(a.VALVE)} ${cleanMode(a.MODE)}(${a['B/A']??'-'})`).join(', ')||'----';
+ const acts=(row.actions||[]).map(a=>`${cleanValve(a.VALVE)} ${cleanMode(a.MODE)}(${cleanBA(a['B/A'])})`).join(', ')||'----';
  return `[${prefix}] ${row.Date||''} ${row.Time||''} | SC: ${formatPressure(row.SC_Pa)} | LC: ${formatPressure(row.LC_Pa)} | CLM: ${currentMachineType==='CG7300'?'N/A':formatPressure(row.CLM_Pa)} | TMP-A/B: ${t12.a}/${t12.b} [${t12.raw}] | TMP3: ${t3.state} [${t3.raw}] | VALVE: ${acts}`;
 }
 
 const valvePlugin={id:'valveMarkers',afterDraw(chart){
  const ctx=chart.ctx,x=chart.scales.x,y=chart.scales.y;
- const enabled=new Set([...document.querySelectorAll('.valveGroup:checked')].map(e=>e.value));
+ const activeFilters=new Set([...document.querySelectorAll('.valve-cb:checked')].map(e=>`${e.dataset.v}_${e.dataset.m}_${e.dataset.ba}`));
  ctx.save();ctx.font='bold 10px Arial';ctx.textAlign='center';
  globalData.forEach((r,i)=>{
    if(!r.actions||!r.actions.length)return;
    const px=x.getPixelForValue(i); if(px<x.left||px>x.right)return;
    r.actions.forEach(a=>{
-     const name=cleanValve(a.VALVE); let group=name;
-     if(name.startsWith('LV'))group='LV';
-     if(!enabled.has(group))return;
+     const name=cleanValve(a.VALVE);
+     let group=name.startsWith('LV')?'LV':name;
+     const mode=cleanMode(a.MODE),ba=cleanBA(a['B/A']);
+     let visible=activeFilters.has(`${group}_${mode}_${ba}`);
+     if(ba==='-')visible=activeFilters.has(`${group}_${mode}_A`)||activeFilters.has(`${group}_${mode}_B`);
+     if(!visible)return;
      const c=VALVE_COLORS[group]||'#64748b';
      ctx.strokeStyle=c;ctx.globalAlpha=.32;ctx.beginPath();ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);ctx.stroke();
-     ctx.globalAlpha=1;ctx.fillStyle=c;ctx.fillText(`${name} ${cleanMode(a.MODE)}`,px,y.top+12);
+     ctx.globalAlpha=1;ctx.fillStyle=c;ctx.fillText(`${name} ${mode}(${ba})`,px,y.top+12);
    });
  });ctx.restore();
 }};
@@ -180,7 +217,7 @@ function drawTMPTracks(){
  canvas.width=cssW*dpr; canvas.height=cssH*dpr; canvas.style.width=cssW+'px'; canvas.style.height=cssH+'px';
  const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,cssW,cssH);
  if(!chartInstance||!globalData.length)return;
- const xScale=chartInstance.scales.x; const left=xScale.left,right=xScale.right;
+ const xScale=chartInstance.scales.x; const right=xScale.right;
  ctx.font='11px monospace';ctx.textBaseline='middle';ctx.fillStyle='#334155';
  const rows=[];if(ui.TMP12.checked){rows.push({label:'TMP-A',y:17,key:'a'});rows.push({label:'TMP-B',y:39,key:'b'});}if(ui.TMP3.checked)rows.push({label:'TMP3',y:61,key:'t3'});
  rows.forEach(r=>ctx.fillText(r.label,4,r.y));
@@ -240,7 +277,6 @@ function processParsedData(dataArray,machineType){
   if(last&&last.Time===raw.Time&&last.SC_Pa===SC_Pa&&last.LC_Pa===LC_Pa){if(action)last.actions.push(action);if(tmp12!==undefined&&tmp12!==null&&tmp12!=='')last.TMP12=tmp12;if(tmp3!==undefined&&tmp3!==null&&tmp3!=='')last.TMP3=tmp3;}
   else{last={Date:raw.Date,Time:raw.Time,SC_Pa,LC_Pa,CLM_Pa,actions:action?[action]:[],TMP12:tmp12,TMP3:tmp3};merged.push(last);}
  });
- // TMP status is a state: forward-fill when source rows omit repeated values.
  let t12=null,t3=null;merged.forEach(r=>{if(r.TMP12!==undefined&&r.TMP12!==null&&r.TMP12!=='')t12=r.TMP12;else r.TMP12=t12;if(r.TMP3!==undefined&&r.TMP3!==null&&r.TMP3!=='')t3=r.TMP3;else r.TMP3=t3;});
  globalData=merged;pinnedRowData=null;renderChart();ui.loadingOverlay.classList.add('hidden');
 }
@@ -253,7 +289,7 @@ function handleFileUpload(e,machineType){
 
 ui.fileInputGT2000E.addEventListener('change',e=>handleFileUpload(e,'GT2000E'));ui.fileInputCG7300.addEventListener('change',e=>handleFileUpload(e,'CG7300'));
 [ui.SC,ui.LC,ui.CLM].forEach((cb,i)=>cb.addEventListener('change',()=>{if(chartInstance){chartInstance.data.datasets[i].hidden=!cb.checked;chartInstance.update();}}));
-[ui.TMP12,ui.TMP3].forEach(cb=>cb.addEventListener('change',drawTMPTracks));document.querySelectorAll('.valveGroup').forEach(cb=>cb.addEventListener('change',()=>chartInstance&&chartInstance.update('none')));
+[ui.TMP12,ui.TMP3].forEach(cb=>cb.addEventListener('change',drawTMPTracks));document.querySelectorAll('.valve-cb').forEach(cb=>cb.addEventListener('change',()=>chartInstance&&chartInstance.update('none')));
 ui.btnResetZoom.addEventListener('click',()=>{if(chartInstance){chartInstance.resetZoom();updateScrollBar();drawTMPTracks();}});window.addEventListener('resize',drawTMPTracks);
 
 function generateMockData(){
