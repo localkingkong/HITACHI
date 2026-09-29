@@ -1,860 +1,265 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vacuum Log Dashboard</title>
-    
-    <!-- Tailwind CSS for UI Styling -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Chart.js for Canvas Plotting -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <!-- Hammer.js (Required for Chart.js Zoom Plugin panning) -->
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-    
-    <!-- Chart.js Zoom Plugin -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
-    
-    <!-- PapaParse for parsing large CSV/TXT logs locally -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
-    <style>
-        /* Custom scrollbar for Light Theme */
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* 圖表專用底部水平捲軸 */
-        #chartScrollContainer::-webkit-scrollbar { height: 12px; }
-        #chartScrollContainer::-webkit-scrollbar-track { background: #f8fafc; border-radius: 4px; border: 1px solid #e2e8f0; }
-        #chartScrollContainer::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 4px; }
-        #chartScrollContainer::-webkit-scrollbar-thumb:hover { background: #64748b; }
-
-        /* 隱藏預設 input checkbox 樣式，改用自訂色彩 */
-        .custom-checkbox { accent-color: currentColor; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vacuum Log Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <style>
+    ::-webkit-scrollbar { width:8px; height:8px; }
+    ::-webkit-scrollbar-track { background:#f1f5f9; }
+    ::-webkit-scrollbar-thumb { background:#cbd5e1; border-radius:4px; }
+    #chartScrollContainer::-webkit-scrollbar { height:12px; }
+    .custom-checkbox { accent-color:currentColor; }
+  </style>
 </head>
-<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden font-sans relative">
+<body class="bg-gray-50 text-gray-800 h-screen flex flex-col overflow-hidden font-sans">
+<header class="bg-white border-b border-gray-200 p-3 flex items-center justify-between shrink-0 shadow-sm">
+  <div class="flex items-center space-x-4">
+    <h1 class="text-xl font-bold text-blue-600">Vacuum Analyzer</h1>
+    <div class="h-6 w-px bg-gray-300"></div>
+    <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-semibold">GT2000E<input type="file" id="fileInputGT2000E" accept=".txt,.csv" class="hidden"></label>
+    <label class="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded text-sm font-semibold">CG7300<input type="file" id="fileInputCG7300" accept=".txt,.csv" class="hidden"></label>
+    <span id="fileNameDisplay" class="text-gray-500 text-sm font-medium">No file loaded (Demo Mode)</span>
+  </div>
+  <button id="btnResetZoom" class="bg-white hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded text-sm font-semibold border border-gray-300">Reset Zoom</button>
+</header>
 
-    <!-- Header / Toolbar -->
-    <header class="bg-white border-b border-gray-200 p-3 flex items-center justify-between shrink-0 z-20 shadow-sm">
-        <div class="flex items-center space-x-4">
-            <h1 class="text-xl font-bold text-blue-600 tracking-wide">Vacuum Analyzer</h1>
-            <div class="h-6 w-px bg-gray-300"></div>
-            
-            <!-- Dual File Uploads for Different Machine Types -->
-            <div class="flex items-center space-x-2">
-                <!-- GT2000E Button -->
-                <label class="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    <span>GT2000E</span>
-                    <input type="file" id="fileInputGT2000E" accept=".txt,.csv" class="hidden">
-                </label>
-                <!-- CG7300 Button -->
-                <label class="cursor-pointer bg-teal-600 hover:bg-teal-700 text-white px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold flex items-center gap-2">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    <span>CG7300</span>
-                    <input type="file" id="fileInputCG7300" accept=".txt,.csv" class="hidden">
-                </label>
-            </div>
-            
-            <span id="fileNameDisplay" class="text-gray-500 text-sm font-medium hidden md:inline ml-2">No file loaded (Demo Mode)</span>
-        </div>
+<div class="flex flex-1 min-h-0 overflow-hidden">
+<main class="flex-1 flex flex-col min-w-0 border-r border-gray-200 bg-white">
+  <section class="bg-gray-50 border-b border-gray-200 p-3 shrink-0 font-mono text-sm leading-relaxed whitespace-nowrap overflow-x-auto shadow-sm">
+    <div id="dataHover" class="text-blue-700 font-semibold">[Hover] ----</div>
+    <div id="dataPinned" class="text-purple-700 font-semibold mt-1">[Pinned] ----</div>
+  </section>
 
-        <div class="flex items-center space-x-3">
-            <button id="btnResetZoom" class="bg-white hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded shadow-sm transition-colors text-sm font-semibold border border-gray-300 flex items-center gap-1">
-                <svg class="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"></path></svg>
-                Reset Zoom
-            </button>
-        </div>
-    </header>
-
-    <div class="flex flex-1 min-h-0 overflow-hidden">
-        
-        <!-- Left Column: Top Data Panel + Bottom Chart -->
-        <main class="flex-1 flex flex-col relative min-w-0 border-r border-gray-200 bg-white">
-            
-            <!-- Fixed Data Panel -->
-            <section class="bg-gray-50 border-b border-gray-200 p-3 shrink-0 z-10 font-mono text-sm leading-relaxed whitespace-nowrap overflow-x-auto shadow-sm">
-                <!-- Hover -->
-                <div id="dataHover" class="text-blue-700 font-semibold">
-                    [Hover] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
-                </div>
-                <!-- Pinned -->
-                <div id="dataPinned" class="text-purple-700 font-semibold mt-1">
-                    [Pinned] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -
-                </div>
-            </section>
-
-            <!-- Canvas Chart Area -->
-            <div class="flex-1 relative pt-4 px-4 pb-2 bg-white flex flex-col min-h-0">
-                <div class="flex-1 relative min-h-0">
-                    <canvas id="vacuumChart"></canvas>
-                </div>
-                <!-- Scrollbar Container -->
-                <div id="chartScrollContainer" class="w-full overflow-x-auto overflow-y-hidden mt-1">
-                    <div id="chartScrollContent" class="h-[1px] w-full"></div>
-                </div>
-            </div>
-            
-            <!-- Loading Overlay -->
-            <div id="loadingOverlay" class="absolute inset-0 bg-white/90 flex flex-col items-center justify-center hidden z-40">
-                <div class="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mb-4"></div>
-                <div class="text-blue-600 text-lg font-bold">Parsing Data...</div>
-            </div>
-        </main>
-
-        <!-- Right Column: Control Panel -->
-        <aside class="w-72 bg-gray-50 flex flex-col shrink-0 overflow-y-auto">
-            
-            <!-- Data Lines -->
-            <div class="p-4 border-b border-gray-200">
-                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Data Lines</h2>
-                <div class="flex flex-col space-y-2 font-semibold text-sm">
-                    <label class="flex items-center space-x-2 cursor-pointer text-blue-600 hover:bg-blue-50 p-1 rounded transition-colors">
-                        <input type="checkbox" id="toggleSC" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
-                        <span>SC</span>
-                    </label>
-                    <label class="flex items-center space-x-2 cursor-pointer text-emerald-600 hover:bg-emerald-50 p-1 rounded transition-colors">
-                        <input type="checkbox" id="toggleLC" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
-                        <span>LC</span>
-                    </label>
-                    <label id="labelCLM" class="flex items-center space-x-2 cursor-pointer text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors">
-                        <input type="checkbox" id="toggleCLM" checked class="custom-checkbox w-4 h-4 rounded border-gray-300">
-                        <span>CLM <span id="clmStatusText" class="text-[10px] text-gray-400 font-normal hidden ml-1">(Unavailable in CG7300)</span></span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Valve Markers -->
-            <div class="p-4">
-                <h2 class="text-sm font-bold text-gray-700 uppercase tracking-wider mb-3">Valve Markers</h2>
-                
-                <div class="flex flex-col space-y-4" id="valveFiltersContainer">
-                    <!-- AV2 Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-pink-600 text-sm border-b border-gray-200 pb-1 mb-2">AV2</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-pink-500 w-3.5 h-3.5" data-v="AV2" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-                    <!-- AV3 Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-cyan-600 text-sm border-b border-gray-200 pb-1 mb-2">AV3</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-cyan-500 w-3.5 h-3.5" data-v="AV3" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-                    <!-- AV4 Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-orange-600 text-sm border-b border-gray-200 pb-1 mb-2">AV4</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-orange-500 w-3.5 h-3.5" data-v="AV4" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-                    <!-- AV5-1 Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-emerald-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-1</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-emerald-500 w-3.5 h-3.5" data-v="AV5-1" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-                    <!-- AV5-2 Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-teal-600 text-sm border-b border-gray-200 pb-1 mb-2">AV5-2</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Open" data-ba="A" checked><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Close" data-ba="A" checked><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-teal-500 w-3.5 h-3.5" data-v="AV5-2" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-                    <!-- LV Group -->
-                    <div class="filter-group">
-                        <div class="font-bold text-yellow-600 text-sm border-b border-gray-200 pb-1 mb-2">LV</div>
-                        <div class="grid grid-cols-2 gap-2 text-xs font-medium text-gray-600">
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Open" data-ba="A"><span>Open(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Open" data-ba="B"><span>Open(B)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Close" data-ba="A"><span>Close(A)</span></label>
-                            <label class="flex items-center space-x-1.5 cursor-pointer"><input type="checkbox" class="valve-cb custom-checkbox text-yellow-500 w-3.5 h-3.5" data-v="LV" data-m="Close" data-ba="B"><span>Close(B)</span></label>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-        </aside>
+  <div class="flex-1 relative pt-4 px-4 pb-1 bg-white flex flex-col min-h-0">
+    <div class="flex-1 relative min-h-0"><canvas id="vacuumChart"></canvas></div>
+    <div id="tmpTracks" class="shrink-0 border-t border-gray-200 mt-1 bg-slate-50 font-mono text-[11px]">
+      <canvas id="tmpCanvas" height="78" class="w-full block"></canvas>
     </div>
+    <div id="chartScrollContainer" class="w-full overflow-x-auto overflow-y-hidden mt-1"><div id="chartScrollContent" class="h-[1px] w-full"></div></div>
+  </div>
+  <div id="loadingOverlay" class="absolute inset-0 bg-white/90 flex items-center justify-center hidden z-40"><div class="text-blue-600 text-lg font-bold">Parsing Data...</div></div>
+</main>
 
-    <script>
-        let globalData = [];
-        let chartInstance = null;
-        let pinnedRowData = null;
-        let currentMachineType = 'GT2000E';
+<aside class="w-72 bg-gray-50 flex flex-col shrink-0 overflow-y-auto">
+  <div class="p-4 border-b border-gray-200">
+    <h2 class="text-sm font-bold text-gray-700 uppercase mb-3">Data Lines</h2>
+    <div class="flex flex-col space-y-2 font-semibold text-sm">
+      <label class="text-blue-600"><input type="checkbox" id="toggleSC" checked class="custom-checkbox mr-2">SC</label>
+      <label class="text-emerald-600"><input type="checkbox" id="toggleLC" checked class="custom-checkbox mr-2">LC</label>
+      <label id="labelCLM" class="text-amber-600"><input type="checkbox" id="toggleCLM" checked class="custom-checkbox mr-2">CLM <span id="clmStatusText" class="text-[10px] text-gray-400 hidden">(Unavailable in CG7300)</span></label>
+    </div>
+  </div>
+  <div class="p-4 border-b border-gray-200">
+    <h2 class="text-sm font-bold text-gray-700 uppercase mb-3">TMP Status</h2>
+    <div class="space-y-2 text-sm">
+      <label class="block"><input type="checkbox" id="toggleTMP12" checked class="custom-checkbox mr-2">TMP1/2 Track</label>
+      <label class="block"><input type="checkbox" id="toggleTMP3" checked class="custom-checkbox mr-2">TMP3 Track</label>
+    </div>
+    <div class="mt-3 text-xs text-gray-500 leading-relaxed">
+      Assumed state: 0=STOP, 1=ACCEL, 2=RUN, 8=DECEL<br>
+      TMP1/2 is displayed as TMP-A / TMP-B until nibble-to-pump mapping is confirmed.
+    </div>
+  </div>
+  <div class="p-4">
+    <h2 class="text-sm font-bold text-gray-700 uppercase mb-3">Valve Markers</h2>
+    <div class="grid grid-cols-2 gap-2 text-xs">
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV2" checked>AV2</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV3" checked>AV3</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV4" checked>AV4</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV5-1" checked>AV5-1</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV5-2" checked>AV5-2</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="LV" checked>LV</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV6" checked>AV6</label>
+      <label><input type="checkbox" class="valveGroup mr-1" value="AV7" checked>AV7</label>
+    </div>
+  </div>
+</aside>
+</div>
 
-        const ui = {
-            fileInputGT2000E: document.getElementById('fileInputGT2000E'),
-            fileInputCG7300: document.getElementById('fileInputCG7300'),
-            fileNameDisplay: document.getElementById('fileNameDisplay'),
-            loadingOverlay: document.getElementById('loadingOverlay'),
-            btnResetZoom: document.getElementById('btnResetZoom'),
-            dataHover: document.getElementById('dataHover'),
-            dataPinned: document.getElementById('dataPinned'),
-            toggles: {
-                SC: document.getElementById('toggleSC'),
-                LC: document.getElementById('toggleLC'),
-                CLM: document.getElementById('toggleCLM')
-            },
-            labels: {
-                CLM: document.getElementById('labelCLM'),
-                clmStatusText: document.getElementById('clmStatusText')
-            }
-        };
+<script>
+let globalData=[];
+let chartInstance=null;
+let pinnedRowData=null;
+let currentMachineType='GT2000E';
+let syncingScroll=false;
 
-        const VALVE_COLORS = {
-            'AV2': '#db2777', // pink
-            'AV3': '#0891b2', // cyan
-            'AV4': '#ea580c', // orange
-            'AV5-1': '#059669', // emerald
-            'AV5-2': '#0d9488', // teal
-            'LV':  '#ca8a04'  // yellow
-        };
+const ui={
+ fileInputGT2000E:document.getElementById('fileInputGT2000E'),
+ fileInputCG7300:document.getElementById('fileInputCG7300'),
+ fileNameDisplay:document.getElementById('fileNameDisplay'),
+ loadingOverlay:document.getElementById('loadingOverlay'),
+ dataHover:document.getElementById('dataHover'),
+ dataPinned:document.getElementById('dataPinned'),
+ btnResetZoom:document.getElementById('btnResetZoom'),
+ SC:document.getElementById('toggleSC'), LC:document.getElementById('toggleLC'), CLM:document.getElementById('toggleCLM'),
+ TMP12:document.getElementById('toggleTMP12'), TMP3:document.getElementById('toggleTMP3'),
+ labelCLM:document.getElementById('labelCLM'), clmStatusText:document.getElementById('clmStatusText')
+};
 
-        // 壓力轉換器：處理 OverRng 與 UndrRng
-        function parsePressure(val) {
-            if (val === undefined || val === null || val === '') return NaN;
-            const strVal = String(val).trim().toUpperCase();
-            if (strVal.includes('OVERRNG') || strVal === 'OVER') return 100000; 
-            if (strVal.includes('UNDRRNG') || strVal === 'UNDER') return 1e-7; 
-            return parseFloat(val);
-        }
+const VALVE_COLORS={'AV2':'#db2777','AV3':'#0891b2','AV4':'#ea580c','AV5-1':'#059669','AV5-2':'#0d9488','LV':'#ca8a04','AV6':'#7c3aed','AV7':'#9333ea'};
+const TMP_STATE={0:'STOP',1:'ACCEL',2:'RUN',8:'DECEL'};
+const TMP_COLOR={STOP:'#cbd5e1',ACCEL:'#f59e0b',RUN:'#16a34a',DECEL:'#ef4444',UNKNOWN:'#94a3b8'};
 
-        // 精確解析 MODE
-        function parseCleanMode(rawMode) {
-            if (!rawMode) return '-----';
-            let clean = String(rawMode).replace(/_/g, '').trim().toUpperCase();
-            if (clean.includes('OPEN') || clean === 'ON') return 'Open';
-            if (clean.includes('CLOS') || clean.includes('SHUT') || clean === 'OFF') return 'Close';
-            return clean;
-        }
+function parsePressure(v){
+ if(v===undefined||v===null||v==='')return NaN;
+ const s=String(v).trim().toUpperCase();
+ if(s.includes('OVERRNG')||s==='OVER')return 100000;
+ if(s.includes('UNDRRNG')||s==='UNDER')return 1e-7;
+ return parseFloat(v);
+}
+function cleanValve(v){
+ if(!v)return '----';
+ let s=String(v).replace(/_/g,'').trim().toUpperCase();
+ if(s.includes('AV51'))return 'AV5-1';
+ if(s.includes('AV52'))return 'AV5-2';
+ if(s.startsWith('LV'))return s;
+ return s||'----';
+}
+function cleanMode(v){
+ if(!v)return '-----';
+ const s=String(v).replace(/_/g,'').trim().toUpperCase();
+ if(s.includes('OPEN')||s==='ON')return 'Open';
+ if(s.includes('CLOS')||s.includes('SHUT')||s==='OFF')return 'Close';
+ return s;
+}
+function normalizeHex(v){
+ if(v===undefined||v===null||v==='')return null;
+ if(typeof v==='number')return '0x'+Math.trunc(v).toString(16).padStart(2,'0').toUpperCase();
+ let s=String(v).trim().toUpperCase();
+ if(!s)return null;
+ if(s.startsWith('0X'))return '0x'+s.slice(2).padStart(2,'0');
+ const n=parseInt(s,16);
+ return Number.isNaN(n)?s:'0x'+n.toString(16).padStart(2,'0').toUpperCase();
+}
+function decodeNibble(n){return TMP_STATE[n]||('0x'+n.toString(16).toUpperCase());}
+function decodeTMP12(raw){
+ const h=normalizeHex(raw); if(!h)return {raw:'---',a:'---',b:'---'};
+ const n=parseInt(h.slice(2),16); if(Number.isNaN(n))return {raw:h,a:'?',b:'?'};
+ return {raw:h,a:decodeNibble((n>>4)&15),b:decodeNibble(n&15)};
+}
+function decodeTMP3(raw){
+ const h=normalizeHex(raw); if(!h)return {raw:'---',state:'---'};
+ const n=parseInt(h.slice(2),16); return {raw:h,state:Number.isNaN(n)?'?':decodeNibble(n&15)};
+}
+function formatPressure(v){return v!==null&&!isNaN(v)?Number(v).toExponential(1).toUpperCase():'---';}
+function formatDataString(prefix,row){
+ if(!row)return `[${prefix}] ----`;
+ const t12=decodeTMP12(row.TMP12), t3=decodeTMP3(row.TMP3);
+ const acts=(row.actions||[]).map(a=>`${cleanValve(a.VALVE)} ${cleanMode(a.MODE)}(${a['B/A']??'-'})`).join(', ')||'----';
+ return `[${prefix}] ${row.Date||''} ${row.Time||''} | SC: ${formatPressure(row.SC_Pa)} | LC: ${formatPressure(row.LC_Pa)} | CLM: ${currentMachineType==='CG7300'?'N/A':formatPressure(row.CLM_Pa)} | TMP-A/B: ${t12.a}/${t12.b} [${t12.raw}] | TMP3: ${t3.state} [${t3.raw}] | VALVE: ${acts}`;
+}
 
-        // 解析與統一 VALVE 命名
-        function parseCleanValveName(rawValve) {
-            if (!rawValve) return '----';
-            let vName = String(rawValve).replace(/_/g, '').trim().toUpperCase();
-            if (vName.includes('AV51') || vName === '51') return 'AV5-1';
-            if (vName.includes('AV52') || vName === '52') return 'AV5-2';
-            if (vName === '____' || vName === '') return '----';
-            return vName;
-        }
+const valvePlugin={id:'valveMarkers',afterDraw(chart){
+ const ctx=chart.ctx,x=chart.scales.x,y=chart.scales.y;
+ const enabled=new Set([...document.querySelectorAll('.valveGroup:checked')].map(e=>e.value));
+ ctx.save();ctx.font='bold 10px Arial';ctx.textAlign='center';
+ globalData.forEach((r,i)=>{
+   if(!r.actions||!r.actions.length)return;
+   const px=x.getPixelForValue(i); if(px<x.left||px>x.right)return;
+   r.actions.forEach(a=>{
+     const name=cleanValve(a.VALVE); let group=name;
+     if(name.startsWith('LV'))group='LV';
+     if(!enabled.has(group))return;
+     const c=VALVE_COLORS[group]||'#64748b';
+     ctx.strokeStyle=c;ctx.globalAlpha=.32;ctx.beginPath();ctx.moveTo(px,y.top);ctx.lineTo(px,y.bottom);ctx.stroke();
+     ctx.globalAlpha=1;ctx.fillStyle=c;ctx.fillText(`${name} ${cleanMode(a.MODE)}`,px,y.top+12);
+   });
+ });ctx.restore();
+}};
+Chart.register(valvePlugin);
 
-        // --- 字串呈現格式化邏輯 ---
-        function formatDataString(prefix, row) {
-            if (!row) return `[${prefix}] ----/--/-- --:--:-- | SC: --- | LC: --- | CLM: --- | VALVE: ----, MODE: -----, B/A: -`;
-            
-            const dateStr = row.Date || '----/--/--';
-            const timeStr = row.Time || '--:--:--';
-            
-            const scStr = row.SC_Pa ? row.SC_Pa.toExponential(1).toUpperCase() : '---';
-            const lcStr = row.LC_Pa ? row.LC_Pa.toExponential(1).toUpperCase() : '---';
-            
-            let clmStr = 'N/A';
-            if (currentMachineType !== 'CG7300' && row.CLM_Pa && !isNaN(row.CLM_Pa)) {
-                clmStr = row.CLM_Pa.toExponential(1).toUpperCase();
-            }
-            
-            // 處理被合併的 actions
-            let vNames = [], vModes = [], vBAs = [];
-            if (row.actions && row.actions.length > 0) {
-                row.actions.forEach(act => {
-                    vNames.push(parseCleanValveName(act.VALVE));
-                    vModes.push(parseCleanMode(act.MODE));
-                    vBAs.push(act['B/A'] !== null && act['B/A'] !== undefined ? String(act['B/A']).trim() : '-');
-                });
-            } else {
-                vNames.push('----');
-                vModes.push('-----');
-                vBAs.push('-');
-            }
+function drawTMPTracks(){
+ const canvas=document.getElementById('tmpCanvas'); const wrap=canvas.parentElement;
+ const dpr=window.devicePixelRatio||1; const cssW=Math.max(300,wrap.clientWidth); const cssH=78;
+ canvas.width=cssW*dpr; canvas.height=cssH*dpr; canvas.style.width=cssW+'px'; canvas.style.height=cssH+'px';
+ const ctx=canvas.getContext('2d');ctx.scale(dpr,dpr);ctx.clearRect(0,0,cssW,cssH);
+ if(!chartInstance||!globalData.length)return;
+ const xScale=chartInstance.scales.x; const left=xScale.left,right=xScale.right;
+ ctx.font='11px monospace';ctx.textBaseline='middle';ctx.fillStyle='#334155';
+ const rows=[];if(ui.TMP12.checked){rows.push({label:'TMP-A',y:17,key:'a'});rows.push({label:'TMP-B',y:39,key:'b'});}if(ui.TMP3.checked)rows.push({label:'TMP3',y:61,key:'t3'});
+ rows.forEach(r=>ctx.fillText(r.label,4,r.y));
+ const labelW=52; const min=Math.max(0,Math.floor(xScale.min??0)), max=Math.min(globalData.length-1,Math.ceil(xScale.max??globalData.length-1));
+ function stateAt(i,key){if(key==='t3')return decodeTMP3(globalData[i].TMP3).state;const d=decodeTMP12(globalData[i].TMP12);return d[key];}
+ rows.forEach(r=>{
+   let start=min,prev=stateAt(min,r.key);
+   for(let i=min+1;i<=max+1;i++){
+     const cur=i<=max?stateAt(i,r.key):'__END__';
+     if(cur!==prev){
+       const x1=Math.max(labelW,xScale.getPixelForValue(start)); const x2=Math.min(right,xScale.getPixelForValue(i));
+       const color=TMP_COLOR[prev]||TMP_COLOR.UNKNOWN; ctx.fillStyle=color;ctx.globalAlpha=.78;ctx.fillRect(x1,r.y-8,Math.max(1,x2-x1),16);ctx.globalAlpha=1;
+       if(x2-x1>42){ctx.fillStyle='#0f172a';ctx.textAlign='center';ctx.fillText(prev,(x1+x2)/2,r.y);ctx.textAlign='left';}
+       start=i;prev=cur;
+     }
+   }
+ });
+ ctx.strokeStyle='#cbd5e1';ctx.beginPath();ctx.moveTo(labelW,0);ctx.lineTo(labelW,cssH);ctx.stroke();
+}
 
-            return `[${prefix}] ${dateStr} ${timeStr} | SC: ${scStr} | LC: ${lcStr} | CLM: ${clmStr} | VALVE: ${vNames.join(', ')}, MODE: ${vModes.join(', ')}, B/A: ${vBAs.join(', ')}`;
-        }
+function initChart(){
+ const ctx=document.getElementById('vacuumChart').getContext('2d');
+ chartInstance=new Chart(ctx,{type:'line',data:{labels:[],datasets:[]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},elements:{point:{radius:0,hitRadius:18,hoverRadius:4},line:{borderWidth:1.5,tension:0}},scales:{x:{ticks:{maxTicksLimit:15,color:'#64748b'},grid:{color:'#e2e8f0'}},y:{type:'logarithmic',position:'left',min:1e-7,max:1e5,title:{display:true,text:'SC / CLM'},ticks:{color:'#2563eb'}},y1:{type:'logarithmic',position:'right',min:1e-10,max:1e6,title:{display:true,text:'LC'},ticks:{color:'#059669'},grid:{drawOnChartArea:false}}},plugins:{legend:{display:false},tooltip:{enabled:false},zoom:{zoom:{wheel:{enabled:true,speed:.1},drag:{enabled:true},mode:'x',onZoom:()=>{updateScrollBar();drawTMPTracks();}},pan:{enabled:true,mode:'x',onPan:()=>{updateScrollBar();drawTMPTracks();}}}},onHover:(e,a)=>{if(a.length)ui.dataHover.innerText=formatDataString('Hover',globalData[a[0].index]);},onClick:(e,a)=>{if(a.length){pinnedRowData=globalData[a[0].index];ui.dataPinned.innerText=formatDataString('Pinned',pinnedRowData);}}}});
+}
+function renderChart(){
+ if(!chartInstance)initChart();
+ chartInstance.data.labels=globalData.map(r=>r.Time);
+ chartInstance.data.datasets=[
+  {label:'SC',data:globalData.map(r=>r.SC_Pa),borderColor:'#2563eb',yAxisID:'y',hidden:!ui.SC.checked},
+  {label:'LC',data:globalData.map(r=>r.LC_Pa),borderColor:'#059669',yAxisID:'y1',hidden:!ui.LC.checked},
+  {label:'CLM',data:currentMachineType==='CG7300'?globalData.map(()=>NaN):globalData.map(r=>r.CLM_Pa),borderColor:'#d97706',borderDash:[4,4],yAxisID:'y',hidden:!ui.CLM.checked}
+ ];
+ chartInstance.update();chartInstance.resetZoom();updateScrollBar();drawTMPTracks();
+ if(globalData.length)ui.dataHover.innerText=formatDataString('Hover',globalData[0]);ui.dataPinned.innerText=formatDataString('Pinned',pinnedRowData);
+}
 
-        let isSyncingLeft = false;
-        let isSyncingChart = false;
+function updateScrollBar(){
+ if(!chartInstance||!globalData.length)return;
+ const x=chartInstance.scales.x,total=globalData.length,min=Math.max(0,x.min??0),max=Math.min(total-1,x.max??total-1),visible=max-min+1;
+ const cont=document.getElementById('chartScrollContainer'),content=document.getElementById('chartScrollContent');
+ const ratio=visible/total;content.style.width=ratio>=.999?'100%':`${100/ratio}%`;
+ if(!syncingScroll&&ratio<.999){const maxScroll=content.offsetWidth-cont.offsetWidth;cont.scrollLeft=(min/(total-visible))*maxScroll;}
+}
+document.getElementById('chartScrollContainer').addEventListener('scroll',e=>{
+ if(!chartInstance||!globalData.length||syncingScroll)return;const cont=e.target,content=document.getElementById('chartScrollContent');const maxScroll=content.offsetWidth-cont.offsetWidth;if(maxScroll<=0)return;
+ const total=globalData.length,x=chartInstance.scales.x,visible=(x.max??total-1)-(x.min??0)+1;const r=cont.scrollLeft/maxScroll;chartInstance.options.scales.x.min=r*(total-visible);chartInstance.options.scales.x.max=chartInstance.options.scales.x.min+visible-1;syncingScroll=true;chartInstance.update('none');drawTMPTracks();requestAnimationFrame(()=>syncingScroll=false);
+});
 
-        function updateScrollBar() {
-            if (isSyncingChart || !chartInstance || globalData.length === 0) return;
-            isSyncingLeft = true;
-            
-            const xScale = chartInstance.scales.x;
-            const totalData = chartInstance.data.labels.length;
-            
-            const minIndex = Math.max(0, xScale.min !== undefined ? xScale.min : 0);
-            const maxIndex = Math.min(totalData - 1, xScale.max !== undefined ? xScale.max : totalData - 1);
-            
-            const visibleItems = (maxIndex - minIndex + 1);
-            const visibleRatio = visibleItems / totalData;
-            
-            const scrollContent = document.getElementById('chartScrollContent');
-            const scrollContainer = document.getElementById('chartScrollContainer');
-            
-            if (visibleRatio >= 0.999) {
-                scrollContent.style.width = '100%';
-                scrollContainer.scrollLeft = 0;
-            } else {
-                scrollContent.style.width = `${(1 / visibleRatio) * 100}%`;
-                const maxScrollLeft = scrollContent.offsetWidth - scrollContainer.offsetWidth;
-                const scrollRatio = minIndex / (totalData - visibleItems);
-                scrollContainer.scrollLeft = scrollRatio * maxScrollLeft;
-            }
-            
-            requestAnimationFrame(() => { setTimeout(() => isSyncingLeft = false, 20); });
-        }
+function processParsedData(dataArray,machineType){
+ let merged=[],last=null;
+ dataArray.forEach(raw=>{
+  const sc=parsePressure(raw.SC),lc=parsePressure(raw.LC),clm=raw.CLM!==undefined?parsePressure(raw.CLM):NaN;
+  const SC_Pa=!isNaN(sc)?Math.max(sc,1e-7):null,LC_Pa=!isNaN(lc)?Math.max(lc,1e-7):null,CLM_Pa=!isNaN(clm)?Math.max(clm,1e-7):null;
+  if(SC_Pa===null||LC_Pa===null)return;
+  const rawValve=raw.VALVE!=null?String(raw.VALVE):'';const action=rawValve.trim()&&rawValve.trim()!=='____'?{VALVE:raw.VALVE,MODE:raw.MODE,'B/A':raw['B/A']}:null;
+  const tmp12=raw['TMP1/2']??raw.TMP12??raw['TMP1_2']; const tmp3=raw.TMP3;
+  if(last&&last.Time===raw.Time&&last.SC_Pa===SC_Pa&&last.LC_Pa===LC_Pa){if(action)last.actions.push(action);if(tmp12!==undefined&&tmp12!==null&&tmp12!=='')last.TMP12=tmp12;if(tmp3!==undefined&&tmp3!==null&&tmp3!=='')last.TMP3=tmp3;}
+  else{last={Date:raw.Date,Time:raw.Time,SC_Pa,LC_Pa,CLM_Pa,actions:action?[action]:[],TMP12:tmp12,TMP3:tmp3};merged.push(last);}
+ });
+ // TMP status is a state: forward-fill when source rows omit repeated values.
+ let t12=null,t3=null;merged.forEach(r=>{if(r.TMP12!==undefined&&r.TMP12!==null&&r.TMP12!=='')t12=r.TMP12;else r.TMP12=t12;if(r.TMP3!==undefined&&r.TMP3!==null&&r.TMP3!=='')t3=r.TMP3;else r.TMP3=t3;});
+ globalData=merged;pinnedRowData=null;renderChart();ui.loadingOverlay.classList.add('hidden');
+}
 
-        document.getElementById('chartScrollContainer').addEventListener('scroll', (e) => {
-            if (isSyncingLeft || !chartInstance || globalData.length === 0) return;
-            isSyncingChart = true;
-            
-            const container = e.target;
-            const content = document.getElementById('chartScrollContent');
-            const maxScrollLeft = content.offsetWidth - container.offsetWidth;
-            
-            if (maxScrollLeft <= 0) {
-                isSyncingChart = false;
-                return;
-            }
-            
-            let scrollRatio = container.scrollLeft / maxScrollLeft;
-            scrollRatio = Math.max(0, Math.min(1, scrollRatio));
-            
-            const totalData = chartInstance.data.labels.length;
-            const xScale = chartInstance.scales.x;
-            const visibleItems = (xScale.max !== undefined ? xScale.max : totalData - 1) - (xScale.min !== undefined ? xScale.min : 0) + 1;
-            
-            const newMin = scrollRatio * (totalData - visibleItems);
-            const newMax = newMin + visibleItems - 1;
-            
-            chartInstance.options.scales.x.min = newMin;
-            chartInstance.options.scales.x.max = newMax;
-            chartInstance.update('none'); 
-            
-            requestAnimationFrame(() => { setTimeout(() => isSyncingChart = false, 20); });
-        });
+function handleFileUpload(e,machineType){
+ const file=e.target.files[0];if(!file)return;currentMachineType=machineType;ui.fileNameDisplay.innerText=`${file.name} (${machineType})`;ui.loadingOverlay.classList.remove('hidden');
+ if(machineType==='CG7300'){ui.CLM.checked=false;ui.CLM.disabled=true;ui.labelCLM.classList.add('opacity-40');ui.clmStatusText.classList.remove('hidden');}else{ui.CLM.checked=true;ui.CLM.disabled=false;ui.labelCLM.classList.remove('opacity-40');ui.clmStatusText.classList.add('hidden');}
+ const reader=new FileReader();reader.onload=ev=>{let lines=ev.target.result.split(/\r?\n/),header=0;for(let i=0;i<lines.length;i++){if(lines[i].includes('SC')&&lines[i].includes('LC')){header=i;break;}}let dl=lines.slice(header);if(dl.length&&!dl[0].includes(','))dl=dl.map(l=>l.trim().replace(/\s+/g,','));Papa.parse(dl.join('\n'),{header:true,skipEmptyLines:true,dynamicTyping:false,complete:r=>processParsedData(r.data,machineType),error:err=>{alert(err.message);ui.loadingOverlay.classList.add('hidden');}});};reader.readAsText(file);e.target.value='';
+}
 
-        // 1. Transfer 背景 
-        const transferCyclePlugin = {
-            id: 'transferCycleBg',
-            beforeDraw: (chart) => {
-                if (!chart.data.datasets.length || globalData.length === 0) return;
-                const ctx = chart.canvas.getContext('2d');
-                const xAxis = chart.scales.x;
-                const yAxis = chart.scales.y; 
-                
-                ctx.save();
-                ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'; 
-                
-                let inTransfer = false;
-                let startX = 0;
+ui.fileInputGT2000E.addEventListener('change',e=>handleFileUpload(e,'GT2000E'));ui.fileInputCG7300.addEventListener('change',e=>handleFileUpload(e,'CG7300'));
+[ui.SC,ui.LC,ui.CLM].forEach((cb,i)=>cb.addEventListener('change',()=>{if(chartInstance){chartInstance.data.datasets[i].hidden=!cb.checked;chartInstance.update();}}));
+[ui.TMP12,ui.TMP3].forEach(cb=>cb.addEventListener('change',drawTMPTracks));document.querySelectorAll('.valveGroup').forEach(cb=>cb.addEventListener('change',()=>chartInstance&&chartInstance.update('none')));
+ui.btnResetZoom.addEventListener('click',()=>{if(chartInstance){chartInstance.resetZoom();updateScrollBar();drawTMPTracks();}});window.addEventListener('resize',drawTMPTracks);
 
-                for (let i = 0; i < globalData.length; i++) {
-                    const isAV3Open = (globalData[i].AV3 === '1' || globalData[i].AV3 === 1);
-                    if (isAV3Open && !inTransfer) {
-                        inTransfer = true;
-                        startX = xAxis.getPixelForValue(i);
-                    } else if (!isAV3Open && inTransfer) {
-                        inTransfer = false;
-                        const endX = xAxis.getPixelForValue(i);
-                        ctx.fillRect(startX, yAxis.top, endX - startX, yAxis.bottom - yAxis.top);
-                    }
-                }
-                if (inTransfer) {
-                    const endX = xAxis.right;
-                    ctx.fillRect(startX, yAxis.top, endX - startX, yAxis.bottom - yAxis.top);
-                }
-                ctx.restore();
-            }
-        };
-
-        // 2. 動態標籤追蹤與貫穿線
-        const nativeValveLabelsPlugin = {
-            id: 'nativeValveLabels',
-            afterDraw: (chart) => {
-                if (!chart.data.datasets.length || globalData.length === 0) return;
-                
-                const ctx = chart.canvas.getContext('2d');
-                const xAxis = chart.scales.x;
-                const yAxis = chart.scales.y;
-
-                const activeFilters = new Set();
-                document.querySelectorAll('.valve-cb:checked').forEach(cb => {
-                    activeFilters.add(`${cb.dataset.v}_${cb.dataset.m}_${cb.dataset.ba}`);
-                });
-
-                ctx.save();
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'bottom';
-                ctx.font = 'bold 11px Arial, sans-serif';
-
-                const drawnBounds = { 0:[], 1:[], 2:[], 3:[], 4:[], 5:[] };
-                const MIN_DISTANCE = 40; 
-
-                for (let i = 0; i < globalData.length; i++) {
-                    const row = globalData[i];
-                    
-                    if (!row.actions || row.actions.length === 0) continue;
-
-                    const x = xAxis.getPixelForValue(i);
-                    if (x < xAxis.left || x > xAxis.right) continue;
-
-                    // == 尋找實際數據線的高度 (LC 優先, 否則 SC) ==
-                    let dataY = yAxis.bottom / 2; // 預設中間
-                    const metaLC = chart.getDatasetMeta(1);
-                    const metaSC = chart.getDatasetMeta(0);
-                    
-                    if (chart.isDatasetVisible(1) && metaLC && metaLC.data[i] && !isNaN(metaLC.data[i].y)) {
-                        dataY = metaLC.data[i].y;
-                    } else if (chart.isDatasetVisible(0) && metaSC && metaSC.data[i] && !isNaN(metaSC.data[i].y)) {
-                        dataY = metaSC.data[i].y;
-                    }
-
-                    dataY = Math.max(yAxis.top, Math.min(yAxis.bottom, dataY));
-                    let isTopHalf = (dataY - yAxis.top) < (yAxis.bottom - yAxis.top) / 2;
-
-                    // 因為已經合併成 actions，所以這裡要遍歷畫圖
-                    row.actions.forEach(act => {
-                        const rawValveStr = act.VALVE !== null && act.VALVE !== undefined ? String(act.VALVE) : '';
-                        if (rawValveStr.trim() === '____' || rawValveStr.trim() === '') return;
-
-                        const vNameRaw = parseCleanValveName(rawValveStr);
-                        const vModeRaw = parseCleanMode(act.MODE);
-                        const vBA = act['B/A'] !== null && act['B/A'] !== undefined ? String(act['B/A']).trim().toUpperCase() : '';
-
-                        let group = '';
-                        let drawLevel = -1;
-                        
-                        if (vNameRaw.startsWith('AV2')) { group = 'AV2'; drawLevel = 0; }
-                        else if (vNameRaw.startsWith('AV3')) { group = 'AV3'; drawLevel = 1; }
-                        else if (vNameRaw.startsWith('AV4')) { group = 'AV4'; drawLevel = 2; }
-                        else if (vNameRaw.startsWith('AV5-1')) { group = 'AV5-1'; drawLevel = 3; }
-                        else if (vNameRaw.startsWith('AV5-2')) { group = 'AV5-2'; drawLevel = 4; }
-                        else if (vNameRaw.startsWith('LV'))  { group = 'LV'; drawLevel = 5; }
-
-                        if (drawLevel === -1) return;
-
-                        let isVisible = false;
-                        const keyA = `${group}_${vModeRaw}_A`;
-                        const keyB = `${group}_${vModeRaw}_B`;
-
-                        if (activeFilters.has(`${group}_${vModeRaw}_${vBA}`)) {
-                            isVisible = true;
-                        } 
-                        else if (vBA !== 'A' && vBA !== 'B') {
-                            if (activeFilters.has(keyA) || activeFilters.has(keyB)) {
-                                isVisible = true;
-                            }
-                        }
-
-                        if (!isVisible) return;
-
-                        let yTop = isTopHalf ? dataY + 25 + (drawLevel * 28) : dataY - 25 - (drawLevel * 28);
-                        yTop = Math.max(yAxis.top + 15, Math.min(yAxis.bottom - 15, yTop));
-
-                        const drawColor = VALVE_COLORS[group];
-
-                        let isOverlapping = false;
-                        for (let bound of drawnBounds[drawLevel]) {
-                            if (Math.abs(bound - x) < MIN_DISTANCE) {
-                                isOverlapping = true;
-                                break;
-                            }
-                        }
-
-                        // 繪製垂直參考線 (即便重疊仍有淡淡的線條保留)
-                        ctx.beginPath();
-                        ctx.moveTo(x, yAxis.top);
-                        ctx.lineTo(x, yAxis.bottom);
-                        ctx.lineWidth = 1.5;
-                        ctx.strokeStyle = drawColor;
-                        ctx.globalAlpha = isOverlapping ? 0.15 : 0.6; 
-                        ctx.stroke();
-
-                        if (!isOverlapping) {
-                            ctx.globalAlpha = 1.0;
-                            const textLine1 = group;
-                            const textLine2 = `${vModeRaw}(${vBA})`;
-                            
-                            ctx.fillStyle = drawColor;
-                            ctx.fillText(textLine1, x, yTop - 1);
-                            ctx.fillText(textLine2, x, yTop + 11);
-                            
-                            drawnBounds[drawLevel].push(x);
-                        }
-                    });
-                }
-                ctx.restore();
-            }
-        };
-
-        Chart.register(transferCyclePlugin, nativeValveLabelsPlugin);
-
-        function initChart() {
-            const ctx = document.getElementById('vacuumChart').getContext('2d');
-            
-            chartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { labels: [], datasets: [] },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    elements: {
-                        point: { radius: 0, hitRadius: 20, hoverRadius: 5 }, 
-                        line: { borderWidth: 1.5, tension: 0 } 
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#64748b', maxTicksLimit: 15 },
-                            grid: { color: '#e2e8f0' }
-                        },
-                        y: {
-                            type: 'logarithmic',
-                            position: 'left',
-                            min: 1e-7, 
-                            max: 1e5,  
-                            ticks: {
-                                color: '#2563eb',
-                                callback: function(value) {
-                                    if (value === 1e5) return '10⁵(Atm)';
-                                    if (value === 1) return '10⁰';
-                                    if (value === 1e-3) return '10⁻³';
-                                    if (value === 1e-5) return '10⁻⁵';
-                                    let log10 = Math.log10(value);
-                                    if (Number.isInteger(log10) && value <= 1e-2) return value.toExponential(0);
-                                    return ''; 
-                                }
-                            },
-                            grid: { color: '#e2e8f0' },
-                            title: { display: true, text: 'SC / CLM', color: '#2563eb', font: { weight: 'bold'} }
-                        },
-                        y1: {
-                            type: 'logarithmic',
-                            position: 'right',
-                            min: 1e-10, 
-                            max: 1e6,  
-                            ticks: {
-                                color: '#059669',
-                                callback: function(value) {
-                                    if (value === 1e5) return '10⁵(Atm)';
-                                    if (value === 100) return '10²';
-                                    if (value === 1e-4) return '10⁻⁴';
-                                    let log10 = Math.log10(value);
-                                    if (Number.isInteger(log10) && value >= 1e-5) return value.toExponential(0);
-                                    return ''; 
-                                }
-                            },
-                            grid: { drawOnChartArea: false }, 
-                            title: { display: true, text: 'LC', color: '#059669', font: { weight: 'bold'} }
-                        }
-                    },
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { enabled: false }, 
-                        zoom: {
-                            zoom: {
-                                wheel: { enabled: true, speed: 0.1 }, 
-                                drag: { enabled: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }, 
-                                mode: 'x',
-                                onZoom: updateScrollBar
-                            },
-                            pan: { 
-                                enabled: true, 
-                                mode: 'x',
-                                onPan: updateScrollBar
-                            }
-                        }
-                    },
-                    onHover: (e, activeElements) => {
-                        if (activeElements.length > 0) {
-                            const dataIndex = activeElements[0].index;
-                            ui.dataHover.innerText = formatDataString('Hover', globalData[dataIndex]);
-                        }
-                    },
-                    onClick: (e, activeElements) => {
-                        if (activeElements.length > 0) {
-                            const dataIndex = activeElements[0].index;
-                            pinnedRowData = globalData[dataIndex];
-                            ui.dataPinned.innerText = formatDataString('Pinned', pinnedRowData);
-                        }
-                    }
-                }
-            });
-        }
-
-        ui.btnResetZoom.addEventListener('click', () => {
-            if (chartInstance) {
-                chartInstance.resetZoom();
-                updateScrollBar();
-            }
-        });
-
-        document.querySelectorAll('.custom-checkbox').forEach(cb => {
-            cb.addEventListener('change', () => {
-                if(cb.id === 'toggleSC' && chartInstance) chartInstance.data.datasets[0].hidden = !cb.checked;
-                if(cb.id === 'toggleLC' && chartInstance) chartInstance.data.datasets[1].hidden = !cb.checked;
-                if(cb.id === 'toggleCLM' && chartInstance) chartInstance.data.datasets[2].hidden = !cb.checked;
-                if (chartInstance) chartInstance.update();
-            });
-        });
-
-        function renderChart() {
-            if (!chartInstance) initChart();
-
-            const labels = globalData.map(r => r.Time);
-            
-            const datasets = [
-                {
-                    label: 'SC',
-                    data: globalData.map(r => r.SC_Pa),
-                    borderColor: '#2563eb', 
-                    borderWidth: 1.5,
-                    yAxisID: 'y', 
-                    hidden: !ui.toggles.SC.checked
-                },
-                {
-                    label: 'LC',
-                    data: globalData.map(r => r.LC_Pa),
-                    borderColor: '#059669', 
-                    borderWidth: 1.5,
-                    yAxisID: 'y1', 
-                    hidden: !ui.toggles.LC.checked
-                },
-                {
-                    label: 'CLM',
-                    data: currentMachineType === 'CG7300' ? globalData.map(() => NaN) : globalData.map(r => r.CLM_Pa),
-                    borderColor: '#d97706', 
-                    borderWidth: 1.5,
-                    borderDash: [4, 4], 
-                    yAxisID: 'y', 
-                    hidden: !ui.toggles.CLM.checked
-                }
-            ];
-
-            chartInstance.data.labels = labels;
-            chartInstance.data.datasets = datasets;
-            
-            chartInstance.update();
-            chartInstance.resetZoom(); 
-            updateScrollBar(); 
-            
-            if (globalData.length > 0) {
-                ui.dataHover.innerText = formatDataString('Hover', globalData[0]);
-                if(!pinnedRowData) ui.dataPinned.innerText = formatDataString('Pinned', null);
-            }
-        }
-
-        // --- File Upload Logic (Dual Handlers with Preprocessor) ---
-        function handleFileUpload(e, machineType) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            currentMachineType = machineType;
-            ui.fileNameDisplay.innerText = `${file.name} (${machineType})`;
-            ui.loadingOverlay.classList.remove('hidden');
-
-            if (machineType === 'CG7300') {
-                ui.toggles.CLM.checked = false;
-                ui.toggles.CLM.disabled = true;
-                ui.labels.CLM.classList.add('opacity-40', 'cursor-not-allowed');
-                ui.labels.clmStatusText.classList.remove('hidden');
-            } else {
-                ui.toggles.CLM.checked = true;
-                ui.toggles.CLM.disabled = false;
-                ui.labels.CLM.classList.remove('opacity-40', 'cursor-not-allowed');
-                ui.labels.clmStatusText.classList.add('hidden');
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                const text = event.target.result;
-                let lines = text.split(/\r?\n/);
-                
-                let headerIndex = 0;
-                for (let i = 0; i < lines.length; i++) {
-                    if (lines[i].includes('SC') && lines[i].includes('LC') && lines[i].includes('VALVE')) {
-                        headerIndex = i;
-                        break;
-                    }
-                }
-                
-                let dataLines = lines.slice(headerIndex);
-                
-                if (dataLines.length > 0) {
-                    const isCSV = dataLines[0].includes(',');
-                    if (!isCSV) {
-                        dataLines = dataLines.map(line => line.trim().replace(/\s+/g, ','));
-                    }
-                }
-                
-                const cleanedText = dataLines.join('\n');
-
-                Papa.parse(cleanedText, {
-                    header: true,
-                    skipEmptyLines: true,
-                    dynamicTyping: true, 
-                    complete: function(results) {
-                        processParsedData(results.data, machineType);
-                    },
-                    error: function(err) {
-                        alert("Error parsing file: " + err.message);
-                        ui.loadingOverlay.classList.add('hidden');
-                    }
-                });
-            };
-            
-            reader.onerror = function() {
-                alert("Failed to read file.");
-                ui.loadingOverlay.classList.add('hidden');
-            };
-
-            reader.readAsText(file);
-            e.target.value = '';
-        }
-
-        ui.fileInputGT2000E.addEventListener('change', (e) => handleFileUpload(e, 'GT2000E'));
-        ui.fileInputCG7300.addEventListener('change', (e) => handleFileUpload(e, 'CG7300'));
-
-        // --- Data Aggregation Engine (合併同秒數與真空值相同的數據) ---
-        function processParsedData(dataArray, machineType) {
-            let mergedData = [];
-            let lastRow = null;
-
-            dataArray.forEach(rawRow => {
-                const scPa_raw = parsePressure(rawRow.SC);
-                const lcPa_raw = parsePressure(rawRow.LC);
-                const clmPa_raw = rawRow.CLM !== undefined ? parsePressure(rawRow.CLM) : NaN;
-
-                const SC_Pa = !isNaN(scPa_raw) ? Math.max(scPa_raw, 1e-7) : null;
-                const LC_Pa = !isNaN(lcPa_raw) ? Math.max(lcPa_raw, 1e-7) : null;
-                const CLM_Pa = !isNaN(clmPa_raw) ? Math.max(clmPa_raw, 1e-7) : null;
-
-                if (SC_Pa === null || LC_Pa === null) return;
-
-                const rawValveStr = rawRow.VALVE !== null && rawRow.VALVE !== undefined ? String(rawRow.VALVE) : '';
-                const hasValveAct = rawValveStr.trim() !== '____' && rawValveStr.trim() !== '';
-                const action = hasValveAct ? {
-                    VALVE: rawRow.VALVE,
-                    MODE: rawRow.MODE,
-                    'B/A': rawRow['B/A']
-                } : null;
-
-                // 若時間戳相同且真空值未改變，則進行聚合 (Aggregation)
-                if (lastRow && lastRow.Time === rawRow.Time && lastRow.SC_Pa === SC_Pa && lastRow.LC_Pa === LC_Pa) {
-                    if (action) {
-                        lastRow.actions.push(action);
-                    }
-                    if (rawRow.AV3 === '1' || rawRow.AV3 === 1) lastRow.AV3 = 1;
-                } else {
-                    const newRow = {
-                        Date: rawRow.Date,
-                        Time: rawRow.Time,
-                        SC_Pa: SC_Pa,
-                        LC_Pa: LC_Pa,
-                        CLM_Pa: CLM_Pa,
-                        AV3: rawRow.AV3,
-                        actions: action ? [action] : []
-                    };
-                    mergedData.push(newRow);
-                    lastRow = newRow;
-                }
-            });
-
-            globalData = mergedData;
-            pinnedRowData = null; 
-            renderChart();
-            ui.loadingOverlay.classList.add('hidden');
-        }
-
-        // --- Mock Data ---
-        function generateMockData() {
-            let mock = [];
-            let timeSec = 0;
-            let sc = 3.65e-5;  
-            let lc = 1e5; 
-            let clm = 1.51e-5; 
-            
-            let currentScFluc = sc;
-            let currentClmFluc = clm;
-
-            const addRow = (valve, mode, ba, av2, av3, av4, av5, lv1, advanceTime = true) => {
-                const date = new Date(0, 0, 0, 5, Math.floor(timeSec/60), timeSec%60);
-                const tStr = date.toTimeString().split(' ')[0];
-
-                mock.push({
-                    Date: "2026/04/26", Time: tStr,
-                    SC: currentScFluc, LC: lc, CLM: currentClmFluc,
-                    AV2: av2, AV3: av3, AV4: av4, "AV5-1": av5, LV1: lv1,
-                    VALVE: valve, MODE: mode, "B/A": ba
-                });
-                
-                if (advanceTime) {
-                    timeSec++;
-                    currentScFluc = sc * (1 + (Math.random() * 0.1 - 0.05));
-                    currentClmFluc = clm * (1 + (Math.random() * 0.02 - 0.01));
-                }
-            };
-
-            for(let i=0; i<15; i++) addRow("____", "_____", "_", 0, 1, 0, 0, 0);
-            
-            addRow("_AV3", "_CLOS", "B", 0, 0, 0, 0, 0, false);
-            addRow("_AV3", "_CLOS", "A", 0, 0, 0, 0, 0, true);
-            
-            // 測試聚合: 同一秒內連續多個動作
-            addRow("_AV51", "CLOSE", "B", 0, 0, 0, 0, 0, false); 
-            addRow("_AV52", "OPEN", "B", 0, 0, 0, 0, 0, false);
-            addRow("_AV51", "CLOSE", "A", 0, 0, 0, 0, 0, false);
-            addRow("_AV52", "OPEN", "A", 0, 0, 0, 0, 0, true);
-
-            for(let i=0; i<25; i++) {
-                lc = lc * 0.5; if(lc < 5) lc = 5;
-                addRow("____", "_____", "_", 0, 0, 0, 1, 0);
-            }
-            
-            addRow("_AV4", "_OPEN", "B", 0, 0, 1, 0, 0, false);
-            addRow("_AV4", "_OPEN", "A", 0, 0, 1, 0, 0, true);
-            for(let i=0; i<25; i++) {
-                lc = lc * 0.6; if(lc < 1e-4) lc = 1e-4; 
-                addRow("____", "_____", "_", 0, 0, 1, 0, 0);
-            }
-            addRow("_AV2", "_OPEN", "B", 1, 0, 1, 0, 0, false);
-            sc = 6e-4; lc = 6e-4; 
-            addRow("_AV2", "_OPEN", "A", 1, 0, 1, 0, 0, true);
-            for(let i=0; i<15; i++) {
-                sc = sc * 0.7; lc = sc;
-                addRow("____", "_____", "_", 1, 0, 1, 0, 0);
-            }
-            sc = 3.65e-5; 
-            addRow("_AV2", "_CLOS", "B", 0, 0, 1, 0, 0, false);
-            addRow("_AV2", "_CLOS", "A", 0, 0, 1, 0, 0, true);
-            
-            processParsedData(mock, 'GT2000E');
-        }
-
-        window.onload = () => generateMockData();
-    </script>
+function generateMockData(){
+ const mock=[];for(let i=0;i<120;i++){let s=i<20?'0x00':i<35?'0x11':i<45?'0x12':i<80?'0x22':i<100?'0x88':'0x00';let t=i<30?'0x00':i<45?'0x01':i<80?'0x02':i<100?'0x08':'0x00';mock.push({Date:'2026/09/29',Time:`00:${String(Math.floor(i/60)).padStart(2,'0')}:${String(i%60).padStart(2,'0')}`,SC:Math.max(1e-4,1e5*Math.pow(.85,i)),LC:Math.max(6e-5,1e5*Math.pow(.84,i)),CLM:Math.max(2e-5,1e5*Math.pow(.83,i)),'TMP1/2':s,TMP3:t,VALVE:i===20?'_AV6':'____',MODE:i===20?'_OPEN':'','B/A':'A'});}processParsedData(mock,'GT2000E');
+}
+window.onload=generateMockData;
+</script>
 </body>
 </html>
